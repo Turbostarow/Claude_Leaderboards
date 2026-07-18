@@ -1,4 +1,8 @@
 {
   "modChannelLastMessageId": null,
-  "leaderboardMessages": {}
+  "leaderboardMessages": {
+    "marvel-rivals": "1528168619802890281",
+    "overwatch": "1528168621153714280",
+    "deadlock": "1528168622000967793"
+  }
 }

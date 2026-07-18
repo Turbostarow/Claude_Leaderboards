@@ -15,6 +15,7 @@ edits one pinned-style bot message per game channel with the sorted leaderboard
 ```
 
 - Each game has one bot message in its own channel that gets **edited in place** — channels never fill up with reposts.
+- The board renders as an aligned table (ANSI code block): bold header row, columns `# / Player / Rank (tier emoji) / Peak / Role / Upd`, top 3 rows colored gold/blue/green, the rest white. Colors show on desktop/web; mobile gets the same table uncolored. Set `"ansiColors": false` in `config.json` for a plain monospace table. Sorting: current rank → peak rank → earliest last-update. Dates are UTC (`19 Jul` style — Discord can't render live timestamps inside code blocks). Tier emoji/abbreviations are editable per game in `config.json` (`tierEmoji`, `tierShort`).
 - Every roster change is a commit in [`data/`](data/), so there's a full audit trail.
 - Every processed command is **deleted from the mod channel** (keeping it clean) and mirrored to the log channel as `✅/❌ @mod used: <command>` plus the outcome. Failed commands ping their author there so mistakes don't vanish silently. Systemic failures (bad token, missing permissions) go to the log channel too, falling back to the mod channel.
 - If the bot can't delete (missing *Manage Messages*) or can't reach the log channel, it falls back to the old behaviour: ✅ / ❌ reactions and in-place replies.

@@ -432,34 +432,107 @@ function compareEntries(game) {
     if (d !== 0) return d;
     const p = scoreOf(game, b.peak) - scoreOf(game, a.peak);
     if (p !== 0) return p;
+    // Tie on both ranks: whoever reached it first (older update) sits higher.
+    const ta = Date.parse(a.updatedAt) || 0;
+    const tb = Date.parse(b.updatedAt) || 0;
+    if (ta !== tb) return ta - tb;
     return String(a.name).localeCompare(String(b.name));
   };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function shortDate(iso) {
+  const t = Date.parse(iso);
+  if (!t) return "--";
+  const d = new Date(t);
+  return `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS[d.getUTCMonth()]}`;
+}
+
+/** Split a canonical rank display ("Diamond II") into tier index + division suffix. */
+function splitRankDisplay(game, display) {
+  const g = CONFIG.games[game];
+  if (!display || display === "Unranked") return { idx: -1, suffix: "" };
+  let idx = -1;
+  let len = -1;
+  g.tiers.forEach((t, i) => {
+    if ((display === t || display.startsWith(t + " ")) && t.length > len) {
+      idx = i;
+      len = t.length;
+    }
+  });
+  return idx === -1 ? { idx: -1, suffix: "" } : { idx, suffix: display.slice(len).trim() };
+}
+
+function shortRank(game, display) {
+  const g = CONFIG.games[game];
+  const { idx, suffix } = splitRankDisplay(game, display);
+  if (idx === -1) return "Unrk";
+  const short = (g.tierShort || [])[idx] || g.tiers[idx];
+  return suffix ? `${short} ${suffix}` : short;
+}
+
+function rankEmoji(game, display) {
+  const g = CONFIG.games[game];
+  const { idx } = splitRankDisplay(game, display);
+  return (idx !== -1 && (g.tierEmoji || [])[idx]) || "\u{1F539}";
+}
+
+/** Pad/truncate to a fixed width (ellipsis on overflow). */
+function pad(s, w) {
+  s = String(s);
+  return s.length > w ? s.slice(0, Math.max(0, w - 1)) + "…" : s.padEnd(w);
 }
 
 function buildEmbed(game, players) {
   const g = CONFIG.games[game];
   const sorted = [...players].sort(compareEntries(game));
+  const useAnsi = CONFIG.ansiColors !== false;
+  const ESC = "\u001b";
 
-  const lines = [];
+  // Column widths tuned to fit an embed code block without wrapping (~56 chars).
+  const W = { pos: 3, name: 14, rank: 7, peak: 8, role: 10 };
+
+  const header =
+    pad("#", W.pos) +
+    pad("Player", W.name) +
+    pad("Rank", 3 + W.rank) + // 3 = emoji (2 units) + space in data rows
+    pad("Peak", W.peak) +
+    pad(g.roleShort || "Role", W.role) +
+    "Upd";
+  const lines = [useAnsi ? `${ESC}[1;4m${header}${ESC}[0m` : header];
+
   sorted.forEach((p, i) => {
-    const badge = i === 0 ? "\u{1F947}" : i === 1 ? "\u{1F948}" : i === 2 ? "\u{1F949}" : `**#${i + 1}**`;
-    const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "-";
-    lines.push(`${badge} **${escMd(p.name)}** (<@${p.id}>)`);
-    lines.push(`> **${p.rank || "Unranked"}** · Peak: **${p.peak || "-"}** · ${escMd(p.role || "-")} · ${ts}`);
+    const row =
+      pad(i + 1, W.pos) +
+      pad(p.name, W.name) +
+      rankEmoji(game, p.rank) + " " + pad(shortRank(game, p.rank), W.rank) +
+      pad(shortRank(game, p.peak), W.peak) +
+      pad(p.role || "-", W.role) +
+      shortDate(p.updatedAt);
+    const color = i === 0 ? "1;33" : i === 1 ? "1;34" : i === 2 ? "1;32" : null; // gold / blue / green
+    lines.push(useAnsi && color ? `${ESC}[${color}m${row}${ESC}[0m` : row);
   });
 
-  let description = lines.join("\n");
+  let description;
   if (!sorted.length) {
     description = "*No players tracked yet.*";
-  } else if (description.length > 4000) {
-    description = description.slice(0, description.lastIndexOf("\n", 3950)) + "\n*…list truncated*";
+  } else {
+    let cut = false;
+    while (lines.join("\n").length > 3900 && lines.length > 2) {
+      lines.pop();
+      cut = true;
+    }
+    description =
+      "```" + (useAnsi ? "ansi" : "") + "\n" + lines.join("\n") + "\n```" +
+      (cut ? "\n*…list truncated*" : "");
   }
 
   return {
     title: `\u{1F3C6} ${g.label} — Leaderboard`,
     color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
     description,
-    footer: { text: `Current rank · Peak · ${g.roleLabel} · Last updated` },
+    footer: { text: "Sorted: rank → peak → earliest update · Auto-refresh ~20 min" },
     timestamp: new Date().toISOString(),
   };
 }

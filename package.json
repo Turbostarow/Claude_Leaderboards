@@ -1,0 +1,11 @@
+{
+  "name": "claude-leaderboards",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Discord game leaderboards (Marvel Rivals / Overwatch 2 / Deadlock) updated by GitHub Actions",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "update": "node scripts/update.js",
+    "check": "node scripts/update.js --check"
+  }
+}

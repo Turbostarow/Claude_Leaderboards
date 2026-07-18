@@ -1,0 +1,59 @@
+name: Leaderboards
+
+on:
+  schedule:
+    - cron: "7,27,47 * * * *" # every 20 min (best-effort; GitHub may run a few min late)
+  workflow_dispatch: {} # the on-demand "refresh now" button
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "config.json"
+      - "scripts/**"
+      - ".github/workflows/leaderboards.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: leaderboards
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # Ignore the pushes this job itself makes ([skip ci] is belt, this is braces)
+    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Poll commands and render leaderboards
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          # manual runs and hand-edits to data/config always re-render;
+          # scheduled runs only touch Discord when something changed
+          FORCE_RENDER: ${{ github.event_name != 'schedule' }}
+        run: |
+          if [ -z "$DISCORD_TOKEN" ]; then
+            echo "::warning::DISCORD_TOKEN secret is not set - nothing to do."
+            exit 0
+          fi
+          node scripts/update.js
+
+      - name: Commit data changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update leaderboard data [skip ci]"
+          fi
+          # GitHub disables cron workflows after 60 days without repo activity;
+          # drop an empty commit before that can happen.
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $(( (now - last) / 86400 )) -ge 50 ]; then
+            git commit --allow-empty -m "chore: keepalive [skip ci]"
+          fi
+          git pull --rebase origin main
+          git push origin main

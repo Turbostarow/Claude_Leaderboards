@@ -1,0 +1,44 @@
+{
+  "modChannelId": "",
+  "games": {
+    "marvel-rivals": {
+      "label": "Marvel Rivals",
+      "channelId": "1528158779793998006",
+      "aliases": ["rivals", "mr", "marvelrivals", "marvel"],
+      "roleLabel": "Preferred Role",
+      "color": "#E62429",
+      "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All"],
+      "divisionCount": 3,
+      "divisionAscending": false,
+      "divisionStyle": "roman",
+      "divisionlessTiers": ["Eternity", "One Above All"],
+      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial" }
+    },
+    "overwatch": {
+      "label": "Overwatch 2",
+      "channelId": "1528158810307301446",
+      "aliases": ["overwatch", "ow", "ow2", "overwatch2"],
+      "roleLabel": "SoloQ Role",
+      "color": "#F99E1A",
+      "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster", "Champion"],
+      "divisionCount": 5,
+      "divisionAscending": false,
+      "divisionStyle": "numeric",
+      "divisionlessTiers": [],
+      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "masters": "Master", "champ": "Champion", "diamant": "Diamond" }
+    },
+    "deadlock": {
+      "label": "Deadlock",
+      "channelId": "1528158837218214140",
+      "aliases": ["deadlock", "dl"],
+      "roleLabel": "Preferred Hero",
+      "color": "#C8A462",
+      "tiers": ["Initiate", "Seeker", "Alchemist", "Arcanist", "Ritualist", "Emissary", "Archon", "Oracle", "Phantom", "Ascendant", "Eternus"],
+      "divisionCount": 6,
+      "divisionAscending": true,
+      "divisionStyle": "numeric",
+      "divisionlessTiers": [],
+      "tierAliases": { "asc": "Ascendant" }
+    }
+  }
+}

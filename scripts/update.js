@@ -273,10 +273,10 @@ async function executeLine(line, ctx) {
   const cmd = (stripped.split(/\s+/)[0] || "").toLowerCase();
   const rest = stripped.slice(cmd.length).trim();
 
-  if (cmd === "help") return { reply: HELP_TEXT };
+  if (cmd === "help") return { reply: HELP_TEXT, ping: true };
   if (cmd === "refresh") {
     ctx.forceRender = true;
-    return {};
+    return { reply: "Re-rendering all leaderboards." };
   }
 
   if (!["add", "update", "remove"].includes(cmd)) {
@@ -357,20 +357,34 @@ async function handleMessage(msg, ctx) {
 
   const errors = [];
   const replies = [];
+  let ping = false;
   for (const line of lines) {
     try {
       const r = await executeLine(line, ctx);
       if (r.reply) replies.push(r.reply);
+      if (r.ping) ping = true;
     } catch (e) {
       errors.push(lines.length > 1 ? `\`${line.slice(0, 80)}\` -> ${e.message}` : e.message);
     }
   }
 
-  await ctx.react(msg.id, errors.length === 0 ? CHECK : CROSS);
-  const parts = [];
-  if (errors.length) parts.push(errors.map((e) => `${CROSS} ${e}`).join("\n"));
-  if (replies.length) parts.push(replies.join("\n"));
-  if (parts.length) await ctx.reply(msg.id, parts.join("\n"));
+  const ok = errors.length === 0;
+
+  // Mirror the command (and its outcome) to the log channel, then delete the
+  // original so the mod channel stays clean. Both steps degrade gracefully:
+  // no log channel or missing permissions -> old reaction/reply behaviour.
+  const logged = await ctx.log(msg, ok, replies, errors, ping || !ok);
+  const deleted = logged ? await ctx.deleteMessage(msg.id) : false;
+
+  if (!deleted) {
+    await ctx.react(msg.id, ok ? CHECK : CROSS);
+    if (!logged) {
+      const parts = [];
+      if (errors.length) parts.push(errors.map((e) => `${CROSS} ${e}`).join("\n"));
+      if (replies.length) parts.push(replies.join("\n"));
+      if (parts.length) await ctx.reply(msg.id, parts.join("\n"));
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -481,7 +495,10 @@ async function check() {
   const me = await api("GET", "/users/@me");
   console.log(`Token OK - logged in as ${me.username}#${me.discriminator} (id ${me.id})`);
 
-  const targets = [["mod channel", CONFIG.modChannelId]];
+  const targets = [
+    ["mod channel", CONFIG.modChannelId],
+    ["log channel", CONFIG.logChannelId],
+  ];
   for (const [key, g] of Object.entries(CONFIG.games)) targets.push([key, g.channelId]);
 
   let failures = 0;
@@ -509,7 +526,6 @@ async function main() {
   if (CHECK_ONLY) return check();
 
   const state = loadState();
-  const systemNotes = [];
 
   const ctx = {
     data: loadData(),
@@ -518,6 +534,60 @@ async function main() {
     lastId: state.modChannelLastMessageId,
     guildId: null,
     nameCache: new Map(),
+    systemNotes: [], // failures worth a red run
+    warnings: [], // degraded-mode notices; run stays green
+    notedKeys: new Set(),
+
+    noteOnce(key, text) {
+      if (this.notedKeys.has(key)) return;
+      this.notedKeys.add(key);
+      this.warnings.push(text);
+    },
+
+    /** Mirror a processed command to the log channel. Returns true on success. */
+    async log(msg, ok, replies, errors, ping) {
+      if (!CONFIG.logChannelId) return false;
+      const authorId = msg.author?.id;
+      const cmdText = (msg.content || "").trim().slice(0, 1400).replace(/``/g, "`​`");
+      const parts = [
+        `${ok ? CHECK : CROSS} <@${authorId}> used:`,
+        "```\n" + cmdText + "\n```",
+      ];
+      const detail = [...errors.map((e) => `${CROSS} ${e}`), ...replies].join("\n");
+      if (detail) parts.push(detail);
+      try {
+        await api("POST", `/channels/${CONFIG.logChannelId}/messages`, {
+          content: parts.join("\n").slice(0, 1990),
+          // mentions render but only ping the author on errors / !help
+          allowed_mentions: { parse: [], users: ping && authorId ? [authorId] : [] },
+        });
+        return true;
+      } catch (e) {
+        console.warn(`Could not post to log channel: ${e.message}`);
+        this.noteOnce(
+          "log-fail",
+          `Can't post to the log channel <#${CONFIG.logChannelId}> - check View Channel + Send Messages there. Command messages are being left in place.`
+        );
+        return false;
+      }
+    },
+
+    /** Delete a processed command message. Returns true on success. */
+    async deleteMessage(messageId) {
+      try {
+        await api("DELETE", `/channels/${CONFIG.modChannelId}/messages/${messageId}`);
+        return true;
+      } catch (e) {
+        console.warn(`Could not delete message ${messageId}: ${e.message}`);
+        if (e.status === 403) {
+          this.noteOnce(
+            "delete-perm",
+            "I can't delete command messages in the mod channel - grant me **Manage Messages** there. Falling back to reactions."
+          );
+        }
+        return false;
+      }
+    },
 
     async displayName(userId) {
       if (this.nameCache.has(userId)) return this.nameCache.get(userId);
@@ -566,7 +636,7 @@ async function main() {
       await pollModChannel(ctx, state);
     } catch (e) {
       console.error(`Mod channel polling failed: ${e.message}`);
-      systemNotes.push(`Mod channel polling failed: ${e.message}`);
+      ctx.systemNotes.push(`Mod channel polling failed: ${e.message}`);
     }
   } else {
     console.warn("config.modChannelId is empty - skipping command polling.");
@@ -584,25 +654,30 @@ async function main() {
       await renderLeaderboard(game, ctx, state);
     } catch (e) {
       console.error(`${game}: render failed: ${e.message}`);
-      systemNotes.push(`${CONFIG.games[game].label} leaderboard update failed: ${e.message}`);
+      ctx.systemNotes.push(`${CONFIG.games[game].label} leaderboard update failed: ${e.message}`);
     }
   }
 
   saveState(state);
 
-  // 4. Surface systemic problems in the mod channel so humans notice.
-  if (systemNotes.length && CONFIG.modChannelId) {
-    try {
-      await api("POST", `/channels/${CONFIG.modChannelId}/messages`, {
-        content: `⚠️ **Leaderboard updater:**\n${systemNotes.map((n) => `- ${n}`).join("\n")}`.slice(0, 1900),
-        allowed_mentions: { parse: [] },
-      });
-    } catch (e) {
-      console.warn(`Could not post system notes: ${e.message}`);
+  // 4. Surface problems where humans look: log channel first, mod channel as backup.
+  const allNotes = [...ctx.systemNotes, ...ctx.warnings];
+  if (allNotes.length) {
+    const content = `⚠️ **Leaderboard updater:**\n${allNotes.map((n) => `- ${n}`).join("\n")}`.slice(0, 1900);
+    for (const chan of [CONFIG.logChannelId, CONFIG.modChannelId].filter(Boolean)) {
+      try {
+        await api("POST", `/channels/${chan}/messages`, {
+          content,
+          allowed_mentions: { parse: [] },
+        });
+        break;
+      } catch (e) {
+        console.warn(`Could not post notes to ${chan}: ${e.message}`);
+      }
     }
   }
 
-  if (systemNotes.length) process.exitCode = 1;
+  if (ctx.systemNotes.length) process.exitCode = 1;
 }
 
 main().catch((e) => {

@@ -16,7 +16,8 @@ edits one pinned-style bot message per game channel with the sorted leaderboard
 
 - Each game has one bot message in its own channel that gets **edited in place** — channels never fill up with reposts.
 - Every roster change is a commit in [`data/`](data/), so there's a full audit trail.
-- The bot reacts ✅ / ❌ to every command and replies with what it did (or what went wrong). Systemic failures (bad token, missing permissions) are posted to the mod channel too.
+- Every processed command is **deleted from the mod channel** (keeping it clean) and mirrored to the log channel as `✅/❌ @mod used: <command>` plus the outcome. Failed commands ping their author there so mistakes don't vanish silently. Systemic failures (bad token, missing permissions) go to the log channel too, falling back to the mod channel.
+- If the bot can't delete (missing *Manage Messages*) or can't reach the log channel, it falls back to the old behaviour: ✅ / ❌ reactions and in-place replies.
 
 ## Mod commands (private channel)
 
@@ -50,9 +51,10 @@ Rank input is forgiving: `Diamond 2`, `diamond II`, `plat 3`, `gm1`, `GOLD III` 
 
 1. **Bot**: any Discord bot token works (this repo uses an existing bot). The bot must be in the server with, per channel:
    - the 3 leaderboard channels: *View Channel, Send Messages, Embed Links*
-   - the private mod channel: *View Channel, Read Message History, Send Messages, Add Reactions*
+   - the private mod channel: *View Channel, Read Message History, Send Messages, Add Reactions, Manage Messages* (the last one is what allows deleting processed commands)
+   - the log channel: *View Channel, Send Messages*
 2. **Secret**: repo → *Settings → Secrets and variables → Actions → New repository secret* → name `DISCORD_TOKEN`, value = the bot token. **The token never goes in any file.**
-3. **Channels**: IDs live in [`config.json`](config.json) (`modChannelId` + one `channelId` per game).
+3. **Channels**: IDs live in [`config.json`](config.json) (`modChannelId`, `logChannelId` + one `channelId` per game).
 4. Push / run the workflow once — the bot posts an initial empty leaderboard in each channel and starts watching the mod channel from that moment (older messages are ignored).
 
 ## Notes & gotchas

@@ -491,25 +491,28 @@ function buildEmbed(game, players) {
   const ESC = "\u001b";
 
   // Column widths tuned to fit an embed code block without wrapping (~56 chars).
-  const W = { pos: 3, name: 14, rank: 7, peak: 8, role: 10 };
+  // Cells are joined with a space so maxed-out content never fuses columns.
+  const W = { pos: 2, name: 13, rank: 6, peak: 6, role: 10 };
 
-  const header =
-    pad("#", W.pos) +
-    pad("Player", W.name) +
-    pad("Rank", 3 + W.rank) + // 3 = emoji (2 units) + space in data rows
-    pad("Peak", W.peak) +
-    pad(g.roleShort || "Role", W.role) +
-    "Upd";
+  const header = [
+    pad("#", W.pos),
+    pad("Player", W.name),
+    pad("Rank", 3 + W.rank), // 3 = emoji (2 units) + space in data rows
+    pad("Peak", W.peak),
+    pad(g.roleShort || "Role", W.role),
+    "Upd",
+  ].join(" ");
   const lines = [useAnsi ? `${ESC}[1;4m${header}${ESC}[0m` : header];
 
   sorted.forEach((p, i) => {
-    const row =
-      pad(i + 1, W.pos) +
-      pad(p.name, W.name) +
-      rankEmoji(game, p.rank) + " " + pad(shortRank(game, p.rank), W.rank) +
-      pad(shortRank(game, p.peak), W.peak) +
-      pad(p.role || "-", W.role) +
-      shortDate(p.updatedAt);
+    const row = [
+      pad(i + 1, W.pos),
+      pad(p.name, W.name),
+      rankEmoji(game, p.rank) + " " + pad(shortRank(game, p.rank), W.rank),
+      pad(shortRank(game, p.peak), W.peak),
+      pad(p.role || "-", W.role),
+      shortDate(p.updatedAt),
+    ].join(" ");
     const color = i === 0 ? "1;33" : i === 1 ? "1;34" : i === 2 ? "1;32" : null; // gold / blue / green
     lines.push(useAnsi && color ? `${ESC}[${color}m${row}${ESC}[0m` : row);
   });

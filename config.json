@@ -1,6 +1,7 @@
 {
   "modChannelId": "1528159080605155428",
   "logChannelId": "1332314116051828868",
+  "renderStyle": "rows",
   "ansiColors": true,
   "games": {
     "marvel-rivals": {
@@ -12,10 +13,10 @@
       "color": "#E62429",
       "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All"],
       "tierShort": ["Brz", "Slv", "Gld", "Plt", "Dia", "GM", "Cel", "Etr", "OAA"],
-      "tierEmoji": ["🟤", "🩶", "🟡", "🔷", "💎", "🔴", "🟣", "🌟", "👑"],
+      "tierEmoji": [":bronze:", ":silver:", ":gold:", ":platinum:", ":diamond:", ":grandmaster:", ":celestial:", ":eternity:", ":oneaboveall:"],
       "divisionCount": 3,
       "divisionAscending": false,
-      "divisionStyle": "roman",
+      "divisionStyle": "numeric",
       "divisionlessTiers": ["Eternity", "One Above All"],
       "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial" }
     },

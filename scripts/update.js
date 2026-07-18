@@ -472,10 +472,14 @@ function shortRank(game, display) {
   return suffix ? `${short} ${suffix}` : short;
 }
 
-function rankEmoji(game, display) {
+function rankEmoji(game, display, emojiMap) {
   const g = CONFIG.games[game];
   const { idx } = splitRankDisplay(game, display);
-  return (idx !== -1 && (g.tierEmoji || [])[idx]) || "\u{1F539}";
+  const raw = (idx !== -1 && (g.tierEmoji || [])[idx]) || "\u{1F539}";
+  const named = raw.match(/^:(.+):$/); // ":grandmaster:" -> custom server emoji
+  if (!named) return raw;
+  const e = emojiMap && emojiMap.get(named[1]);
+  return e ? `<${e.animated ? "a" : ""}:${e.name}:${e.id}>` : "\u{1F539}";
 }
 
 /** Pad/truncate to a fixed width (ellipsis on overflow). */
@@ -484,9 +488,42 @@ function pad(s, w) {
   return s.length > w ? s.slice(0, Math.max(0, w - 1)) + "…" : s.padEnd(w);
 }
 
-function buildEmbed(game, players) {
+/** Default style: markdown rows - real server emoji badges, mentions, live timestamps. */
+function buildRowsEmbed(game, g, sorted, ctx) {
+  const lines = [`**#  ·  Player  ·  Rank  ·  Peak  ·  ${g.roleShort || "Role"}  ·  Updated**`];
+  sorted.forEach((p, i) => {
+    const badge = ["\u{1F7E1}", "\u{1F535}", "\u{1F7E2}"][i] || "⚪"; // gold/blue/green, rest white
+    const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
+    lines.push(
+      `${badge} **#${i + 1}** <@${p.id}> · ${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)} · ${escMd(p.role || "-")} · ${ts}`
+    );
+  });
+
+  let description;
+  if (!sorted.length) {
+    description = "*No players tracked yet.*";
+  } else {
+    let cut = false;
+    while (lines.join("\n").length > 3950 && lines.length > 2) {
+      lines.pop();
+      cut = true;
+    }
+    description = lines.join("\n") + (cut ? "\n*…list truncated*" : "");
+  }
+
+  return {
+    title: `\u{1F3C6} ${g.label} — Leaderboard`,
+    color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
+    description,
+    footer: { text: "Peak/current ranks are from the current season · the board resets each new season" },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function buildEmbed(game, players, ctx) {
   const g = CONFIG.games[game];
   const sorted = [...players].sort(compareEntries(game));
+  if ((CONFIG.renderStyle || "rows") !== "ansi") return buildRowsEmbed(game, g, sorted, ctx);
   const useAnsi = CONFIG.ansiColors !== false;
   const ESC = "\u001b";
 
@@ -542,7 +579,7 @@ function buildEmbed(game, players) {
 
 async function renderLeaderboard(game, ctx, state) {
   const g = CONFIG.games[game];
-  const embed = buildEmbed(game, ctx.data[game]);
+  const embed = buildEmbed(game, ctx.data[game], ctx);
   const body = { content: "", embeds: [embed], allowed_mentions: { parse: [] } };
   const existingId = state.leaderboardMessages?.[game];
 
@@ -716,6 +753,29 @@ async function main() {
     }
   } else {
     console.warn("config.modChannelId is empty - skipping command polling.");
+  }
+
+  // Resolve custom server emojis (":name:" entries in tierEmoji) to <:name:id>.
+  ctx.emojiMap = new Map();
+  const wantsCustom = Object.values(CONFIG.games).some((g) =>
+    (g.tierEmoji || []).some((e) => /^:.+:$/.test(e))
+  );
+  if (wantsCustom) {
+    try {
+      if (!ctx.guildId) {
+        const anyChannel = Object.values(CONFIG.games)[0].channelId;
+        const ch = await api("GET", `/channels/${anyChannel}`);
+        ctx.guildId = ch.guild_id || null;
+      }
+      const emojis = await api("GET", `/guilds/${ctx.guildId}/emojis`);
+      for (const e of emojis) ctx.emojiMap.set(e.name, e);
+      console.log(`Loaded ${ctx.emojiMap.size} server emojis.`);
+    } catch (e) {
+      ctx.noteOnce(
+        "emoji-load",
+        `Couldn't load the server emoji list (${e.message.slice(0, 100)}) - rank badges fall back to \u{1F539}.`
+      );
+    }
   }
 
   // 2. Persist any data changes for the workflow to commit.

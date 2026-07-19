@@ -497,6 +497,19 @@ function embedBase(g) {
   };
 }
 
+const ROLE_PAD = 12;
+const FIG = " "; // figure space - Discord renders it, never collapses it
+
+function roleEmojiFor(game, role, emojiMap) {
+  const g = CONFIG.games[game];
+  const raw = (g.roleEmoji || {})[normalize(String(role || ""))];
+  if (!raw) return null;
+  const named = String(raw).match(/^:(.+):$/);
+  if (!named) return raw;
+  const e = emojiMap && emojiMap.get(named[1]);
+  return e ? `<${e.animated ? "a" : ""}:${e.name}:${e.id}>` : null;
+}
+
 /** Default style: a 3-column field grid - the closest Discord gets to a real table. */
 function buildTableEmbed(game, g, sorted, ctx) {
   if (!sorted.length) return { ...embedBase(g), description: "*No players tracked yet.*" };
@@ -505,11 +518,19 @@ function buildTableEmbed(game, g, sorted, ctx) {
   const c2 = [];
   const c3 = [];
   sorted.forEach((p, i) => {
-    const badge = ["\u{1F7E1}", "\u{1F535}", "\u{1F7E2}"][i] || "⚪"; // gold/blue/green, rest white
     const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
-    c1.push(`${badge} **#${i + 1}** <@${p.id}>`);
+    // Real member ids become mention chips; demo/placeholder ids show as bold names.
+    const who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
+    c1.push(`**#${i + 1}** ${who}`);
     c2.push(`${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
-    c3.push(`${escMd(pad(p.role || "-", 10).trim())} · ${ts}`); // role capped so cells rarely wrap
+    const role = String(p.role || "-").slice(0, ROLE_PAD);
+    const rEmoji = roleEmojiFor(game, p.role, ctx && ctx.emojiMap);
+    c3.push(
+      (rEmoji ? `${rEmoji} ` : FIG.repeat(3)) +
+        escMd(role) +
+        FIG.repeat(Math.max(1, ROLE_PAD - role.length)) +
+        ts
+    );
   });
 
   let cut = false;
@@ -524,8 +545,8 @@ function buildTableEmbed(game, g, sorted, ctx) {
     ...embedBase(g),
     fields: [
       { name: "# · Player", value: c1.join("\n"), inline: true },
-      { name: "Rank · Peak", value: c2.join("\n"), inline: true },
-      { name: `${g.roleShort || "Role"} · Updated`, value: c3.join("\n"), inline: true },
+      { name: "Current Rank · Peak", value: c2.join("\n"), inline: true },
+      { name: `${FIG.repeat(3)}${g.roleShort || "Role"}${FIG.repeat(9)}Updated`, value: c3.join("\n"), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };

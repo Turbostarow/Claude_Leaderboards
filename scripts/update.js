@@ -519,7 +519,7 @@ const ROLE_PAD = 12;
 const THIN = String.fromCharCode(0x2009); // thin space - non-collapsing
 const HAIR = String.fromCharCode(0x200a); // hair space - non-collapsing
 const ZWSP = String.fromCharCode(0x200b); // zero-width space (Discord accepts as non-empty)
-const ROW_SEP = "\n" + ZWSP + "\n"; // blank line between leaderboard rows
+const ROW_SEP = CONFIG.rowSpacing ? "\n" + ZWSP + "\n" : "\n"; // config.rowSpacing: blank line between rows
 const EMOJI_PREFIX_W = 1.9; // custom emoji + trailing space, in em
 const ROLE_TARGET_W = 5.1; // role text slot width, in em
 

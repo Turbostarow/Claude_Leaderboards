@@ -6,6 +6,7 @@
   "games": {
     "marvel-rivals": {
       "label": "Marvel Rivals",
+      "title": "Blood Rose :MR: Community Leaderboard",
       "channelId": "1528158779793998006",
       "aliases": ["rivals", "mr", "marvelrivals", "marvel"],
       "roleLabel": "Preferred Role",

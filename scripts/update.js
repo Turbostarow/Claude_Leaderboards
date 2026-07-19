@@ -492,9 +492,27 @@ function embedBase(g) {
   return {
     title: `\u{1F3C6} ${g.label} — Leaderboard`,
     color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
-    footer: { text: "Peak/current ranks are from the current season · the board resets each new season" },
+    footer: { text: "Current / Peak ranks are current season, they reset with each new season" },
     timestamp: new Date().toISOString(),
   };
+}
+
+/** Replace ":name:" tokens with the server's custom emoji (case-insensitive fallback). */
+function resolveEmojiTokens(text, emojiMap) {
+  return String(text).replace(/:([A-Za-z0-9_~]+):/g, (m, name) => {
+    if (!emojiMap) return m;
+    let e = emojiMap.get(name);
+    if (!e) {
+      const lower = name.toLowerCase();
+      for (const v of emojiMap.values()) {
+        if (v.name.toLowerCase() === lower) {
+          e = v;
+          break;
+        }
+      }
+    }
+    return e ? `<${e.animated ? "a" : ""}:${e.name}:${e.id}>` : m;
+  });
 }
 
 const ROLE_PAD = 12;
@@ -512,7 +530,12 @@ function roleEmojiFor(game, role, emojiMap) {
 
 /** Default style: a 3-column field grid - the closest Discord gets to a real table. */
 function buildTableEmbed(game, g, sorted, ctx) {
-  if (!sorted.length) return { ...embedBase(g), description: "*No players tracked yet.*" };
+  const emojiMap = ctx && ctx.emojiMap;
+  const base = embedBase(g);
+  base.title = undefined; // the big title lives in the description as a # heading instead
+  const heading = `# ${resolveEmojiTokens(g.title || `\u{1F3C6} ${g.label} — Leaderboard`, emojiMap)}`;
+
+  if (!sorted.length) return { ...base, description: `${heading}\n*No players tracked yet.*` };
 
   const c1 = [];
   const c2 = [];
@@ -522,13 +545,9 @@ function buildTableEmbed(game, g, sorted, ctx) {
     // Real member ids become mention chips; demo/placeholder ids show as bold names.
     const who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
     c1.push(`**#${i + 1}**${FIG}${FIG} ${who}`);
-    // Pad the current rank so the dot sits at a near-fixed column between rank and peak.
-    const cur = shortRank(game, p.rank);
-    c2.push(
-      `${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${cur}**${FIG.repeat(Math.max(2, 10 - cur.length))}·${FIG}${FIG}${shortRank(game, p.peak)}`
-    );
+    c2.push(`${rankEmoji(game, p.rank, emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
     const role = String(p.role || "-").slice(0, ROLE_PAD);
-    const rEmoji = roleEmojiFor(game, p.role, ctx && ctx.emojiMap);
+    const rEmoji = roleEmojiFor(game, p.role, emojiMap);
     c3.push(
       (rEmoji ? `${rEmoji} ` : FIG.repeat(3)) +
         escMd(role) +
@@ -538,23 +557,25 @@ function buildTableEmbed(game, g, sorted, ctx) {
   });
 
   let cut = false;
-  while ([c1, c2, c3].some((c) => c.join("\n").length > 1000) && c1.length > 1) {
+  while ([c1, c2, c3].some((c) => c.join("\n").length > 950) && c1.length > 1) {
     c1.pop();
     c2.pop();
     c3.pop();
     cut = true;
   }
 
+  // Column headers are ## headings inside the field values (bigger + bold);
+  // the field names are zero-width spaces since Discord requires them non-empty.
   const embed = {
-    ...embedBase(g),
+    ...base,
+    description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
-      { name: `#${FIG}${FIG} · Player`, value: c1.join("\n"), inline: true },
-      { name: `Current Rank${FIG}·${FIG}${FIG}Peak`, value: c2.join("\n"), inline: true },
-      { name: `${FIG.repeat(5)}${g.roleShort || "Role"}${FIG.repeat(7)}Updated`, value: c3.join("\n"), inline: true },
+      { name: "​", value: `## #${FIG}${FIG} Player\n` + c1.join("\n"), inline: true },
+      { name: "​", value: `## Current Rank · Peak\n` + c2.join("\n"), inline: true },
+      { name: "​", value: `## ${FIG.repeat(2)}${g.roleShort || "Role"}${FIG.repeat(5)}Updated\n` + c3.join("\n"), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };
-  if (cut) embed.description = "*…list truncated*";
   return embed;
 }
 

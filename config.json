@@ -1,7 +1,7 @@
 {
   "modChannelId": "1528159080605155428",
   "logChannelId": "1332314116051828868",
-  "renderStyle": "rows",
+  "renderStyle": "table",
   "ansiColors": true,
   "games": {
     "marvel-rivals": {

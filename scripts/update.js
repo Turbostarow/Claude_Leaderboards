@@ -488,9 +488,54 @@ function pad(s, w) {
   return s.length > w ? s.slice(0, Math.max(0, w - 1)) + "…" : s.padEnd(w);
 }
 
-/** Default style: markdown rows - real server emoji badges, mentions, live timestamps. */
+function embedBase(g) {
+  return {
+    title: `\u{1F3C6} ${g.label} — Leaderboard`,
+    color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
+    footer: { text: "Peak/current ranks are from the current season · the board resets each new season" },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/** Default style: a 3-column field grid - the closest Discord gets to a real table. */
+function buildTableEmbed(game, g, sorted, ctx) {
+  if (!sorted.length) return { ...embedBase(g), description: "*No players tracked yet.*" };
+
+  const c1 = [];
+  const c2 = [];
+  const c3 = [];
+  sorted.forEach((p, i) => {
+    const badge = ["\u{1F7E1}", "\u{1F535}", "\u{1F7E2}"][i] || "⚪"; // gold/blue/green, rest white
+    const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
+    c1.push(`${badge} **#${i + 1}** <@${p.id}>`);
+    c2.push(`${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
+    c3.push(`${escMd(pad(p.role || "-", 10).trim())} · ${ts}`); // role capped so cells rarely wrap
+  });
+
+  let cut = false;
+  while ([c1, c2, c3].some((c) => c.join("\n").length > 1000) && c1.length > 1) {
+    c1.pop();
+    c2.pop();
+    c3.pop();
+    cut = true;
+  }
+
+  const embed = {
+    ...embedBase(g),
+    fields: [
+      { name: "# · Player", value: c1.join("\n"), inline: true },
+      { name: "Rank · Peak", value: c2.join("\n"), inline: true },
+      { name: `${g.roleShort || "Role"} · Updated`, value: c3.join("\n"), inline: true },
+      { name: "​", value: "​", inline: false }, // breathing room above the footer
+    ],
+  };
+  if (cut) embed.description = "*…list truncated*";
+  return embed;
+}
+
+/** "rows" style: one markdown line per player. */
 function buildRowsEmbed(game, g, sorted, ctx) {
-  const lines = [`**#  ·  Player  ·  Rank  ·  Peak  ·  ${g.roleShort || "Role"}  ·  Updated**`];
+  const lines = [`**Pos · Player · Rank · Peak · ${g.roleShort || "Role"} · Updated**`];
   sorted.forEach((p, i) => {
     const badge = ["\u{1F7E1}", "\u{1F535}", "\u{1F7E2}"][i] || "⚪"; // gold/blue/green, rest white
     const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
@@ -508,22 +553,18 @@ function buildRowsEmbed(game, g, sorted, ctx) {
       lines.pop();
       cut = true;
     }
-    description = lines.join("\n") + (cut ? "\n*…list truncated*" : "");
+    description = lines.join("\n") + (cut ? "\n*…list truncated*" : "") + "\n\n​";
   }
 
-  return {
-    title: `\u{1F3C6} ${g.label} — Leaderboard`,
-    color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
-    description,
-    footer: { text: "Peak/current ranks are from the current season · the board resets each new season" },
-    timestamp: new Date().toISOString(),
-  };
+  return { ...embedBase(g), description };
 }
 
 function buildEmbed(game, players, ctx) {
   const g = CONFIG.games[game];
   const sorted = [...players].sort(compareEntries(game));
-  if ((CONFIG.renderStyle || "rows") !== "ansi") return buildRowsEmbed(game, g, sorted, ctx);
+  const style = CONFIG.renderStyle || "table";
+  if (style === "table") return buildTableEmbed(game, g, sorted, ctx);
+  if (style !== "ansi") return buildRowsEmbed(game, g, sorted, ctx);
   const useAnsi = CONFIG.ansiColors !== false;
   const ESC = "\u001b";
 

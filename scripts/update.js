@@ -550,7 +550,7 @@ function padSpaces(em) {
   while (em - w >= 0.09) { out += HAIR; w += 0.1; }
   return out;
 }
-const FIG = " "; // figure space - Discord renders it, never collapses it
+const FIG = "  "; // figure space - Discord renders it, never collapses it
 
 function roleEmojiFor(game, role, emojiMap) {
   const g = CONFIG.games[game];
@@ -659,7 +659,7 @@ function buildEmbed(game, players, ctx) {
     pad("Player", W.name),
     pad("Rank", 3 + W.rank), // 3 = emoji (2 units) + space in data rows
     pad("Peak", W.peak),
-    pad(g.roleShort || "Role", W.role),
+    pad(g.roleShort || "   Role", W.role),
     "Upd",
   ].join(" ");
   const lines = [useAnsi ? `${ESC}[1;4m${header}${ESC}[0m` : header];

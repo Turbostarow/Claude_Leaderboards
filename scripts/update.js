@@ -521,8 +521,12 @@ function buildTableEmbed(game, g, sorted, ctx) {
     const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
     // Real member ids become mention chips; demo/placeholder ids show as bold names.
     const who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
-    c1.push(`**#${i + 1}** ${who}`);
-    c2.push(`${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
+    c1.push(`**#${i + 1}**${FIG}${FIG} ${who}`);
+    // Pad the current rank so the dot sits at a near-fixed column between rank and peak.
+    const cur = shortRank(game, p.rank);
+    c2.push(
+      `${rankEmoji(game, p.rank, ctx && ctx.emojiMap)} **${cur}**${FIG.repeat(Math.max(2, 10 - cur.length))}·${FIG}${FIG}${shortRank(game, p.peak)}`
+    );
     const role = String(p.role || "-").slice(0, ROLE_PAD);
     const rEmoji = roleEmojiFor(game, p.role, ctx && ctx.emojiMap);
     c3.push(
@@ -544,9 +548,9 @@ function buildTableEmbed(game, g, sorted, ctx) {
   const embed = {
     ...embedBase(g),
     fields: [
-      { name: "# · Player", value: c1.join("\n"), inline: true },
-      { name: "Current Rank · Peak", value: c2.join("\n"), inline: true },
-      { name: `${FIG.repeat(3)}${g.roleShort || "Role"}${FIG.repeat(9)}Updated`, value: c3.join("\n"), inline: true },
+      { name: `#${FIG}${FIG} · Player`, value: c1.join("\n"), inline: true },
+      { name: `Current Rank${FIG}·${FIG}${FIG}Peak`, value: c2.join("\n"), inline: true },
+      { name: `${FIG.repeat(5)}${g.roleShort || "Role"}${FIG.repeat(7)}Updated`, value: c3.join("\n"), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };

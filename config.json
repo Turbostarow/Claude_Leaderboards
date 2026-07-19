@@ -14,7 +14,7 @@
       "roleShort": "Role",
       "color": "#E62429",
       "tiers": ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Grandmaster", "Celestial", "Eternity", "One Above All"],
-      "tierShort": ["Bronze", "Silver", "Gold", "Plat", "Dia", "GM", "Cel", "Etr", "OAA"],
+      "tierShort": ["Bronze", "Silver", "Gold", "Plat", "Dia", "GM", "Cel", "Eternity", "OAA"],
       "tierEmoji": [":bronze:", ":silver:", ":gold:", ":platinum:", ":diamond:", ":grandmaster:", ":celestial:", ":eternity:", ":oneaboveall:"],
       "roleEmoji": { "strategist": ":strategist:", "duelist": ":duelist:", "vanguard": ":vanguard:", "flex": ":flex:" },
       "divisionCount": 3,

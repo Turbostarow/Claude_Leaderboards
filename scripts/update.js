@@ -492,7 +492,7 @@ function embedBase(g) {
   return {
     title: `\u{1F3C6} ${g.label} — Leaderboard`,
     color: parseInt(String(g.color).replace(/^#/, ""), 16) || 0x5865f2,
-    footer: { text: "Current / Peak ranks are current season, they reset with each new season" },
+    footer: { text: "Current / Peak ranks sunt din sezonul acesta, ele se reseteaza la fiecare sezon nou" },
     timestamp: new Date().toISOString(),
   };
 }

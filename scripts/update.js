@@ -541,16 +541,20 @@ function estWidth(s) {
   return w;
 }
 
-/** Build a non-collapsing space run of roughly `em` width. */
+/** Build a non-collapsing space run of roughly `em` width.
+ *  Increments come from estWidth() itself so the two can never disagree. */
 function padSpaces(em) {
+  const wf = estWidth(FIG);
+  const wt = estWidth(THIN);
+  const wh = estWidth(HAIR);
   let out = "";
   let w = 0;
-  while (em - w >= 0.5) { out += FIG; w += 0.55; }
-  while (em - w >= 0.18) { out += THIN; w += 0.2; }
-  while (em - w >= 0.09) { out += HAIR; w += 0.1; }
+  while (em - w >= wf * 0.9) { out += FIG; w += wf; }
+  while (em - w >= wt * 0.9) { out += THIN; w += wt; }
+  while (em - w >= wh * 0.9) { out += HAIR; w += wh; }
   return out;
 }
-const FIG = "  "; // figure space - Discord renders it, never collapses it
+const FIG = " "; // figure space - Discord renders it, never collapses it
 
 function roleEmojiFor(game, role, emojiMap) {
   const g = CONFIG.games[game];

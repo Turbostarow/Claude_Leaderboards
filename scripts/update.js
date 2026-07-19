@@ -603,12 +603,12 @@ function buildTableEmbed(game, g, sorted, ctx) {
   const rs = g.roleShort || "Role";
   // Header nudges come from config.headerNudge (em units, rightward only).
   const nudge = CONFIG.headerNudge || {};
+  // Build up to the end of "Role", then measure what was actually emitted and
+  // pad to a fixed Updated target - so the role nudge never drifts Updated.
+  const rolePrefix = padSpaces(EMOJI_PREFIX_W + (nudge.role || 0)) + rs;
+  const updatedTarget = EMOJI_PREFIX_W + ROLE_TARGET_W + (nudge.updated || 0);
   const roleHeader =
-    padSpaces(EMOJI_PREFIX_W + (nudge.role || 0)) +
-    rs +
-    padSpaces(Math.max(0.3, ROLE_TARGET_W - (nudge.role || 0) - estWidth(rs))) +
-    padSpaces(nudge.updated || 0) +
-    "Updated";
+    rolePrefix + padSpaces(Math.max(0.3, updatedTarget - estWidth(rolePrefix))) + "Updated";
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),

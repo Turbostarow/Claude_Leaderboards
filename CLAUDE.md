@@ -56,9 +56,11 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   emojis, @mentions, or `<t:...>` timestamps. You can't have both — the user chose the
   live grid.
 - Inline embed fields cap at **3 per row** (6 fields fold into two bands of 3).
-- Markdown headings (`#`/`##`) render in embed descriptions and field values, NOT in
-  titles/field names — that's how the big title and big column headers are done.
-  A line starting with `#` in a description accidentally becomes a jumbo heading.
+- Markdown headings (`#`/`##`) render ONLY in embed descriptions — not in titles, field
+  names, or field values (verified live: `##` in a field value shows literal hashes).
+  The big board title is a `#` heading in the description; column headers are stuck at
+  Discord's fixed bold field-name size. A line starting with `#` in a description
+  accidentally becomes a jumbo heading.
 - Custom emojis resolve as `<:name:id>`; the script fetches `/guilds/{id}/emojis` each
   run and resolves `":name:"` strings from config (`tierEmoji`, `roleEmoji`, `title`
   tokens) by name, case-insensitive fallback, 🔹 or literal text when missing.

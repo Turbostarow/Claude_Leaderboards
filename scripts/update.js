@@ -516,6 +516,38 @@ function resolveEmojiTokens(text, emojiMap) {
 }
 
 const ROLE_PAD = 12;
+const THIN = String.fromCharCode(0x2009); // thin space - non-collapsing
+const HAIR = String.fromCharCode(0x200a); // hair space - non-collapsing
+const EMOJI_PREFIX_W = 1.9; // custom emoji + trailing space, in em
+const ROLE_TARGET_W = 5.1; // role text slot width, in em
+
+/** Rough rendered-width estimate (em) for Discord's proportional font. */
+function estWidth(s) {
+  let w = 0;
+  for (const ch of String(s)) {
+    if (ch === THIN) w += 0.2;
+    else if (ch === HAIR) w += 0.1;
+    else if (ch.charCodeAt(0) === 0x2007) w += 0.55;
+    else if ("iljI.,':;|!".includes(ch)) w += 0.28;
+    else if ("ftr()-".includes(ch)) w += 0.36;
+    else if ("mwMW".includes(ch)) w += 0.88;
+    else if (ch >= "A" && ch <= "Z") w += 0.68;
+    else if (ch >= "0" && ch <= "9") w += 0.55;
+    else if (ch === " ") w += 0.3;
+    else w += 0.52;
+  }
+  return w;
+}
+
+/** Build a non-collapsing space run of roughly `em` width. */
+function padSpaces(em) {
+  let out = "";
+  let w = 0;
+  while (em - w >= 0.5) { out += FIG; w += 0.55; }
+  while (em - w >= 0.18) { out += THIN; w += 0.2; }
+  while (em - w >= 0.09) { out += HAIR; w += 0.1; }
+  return out;
+}
 const FIG = " "; // figure space - Discord renders it, never collapses it
 
 function roleEmojiFor(game, role, emojiMap) {
@@ -549,9 +581,9 @@ function buildTableEmbed(game, g, sorted, ctx) {
     const role = String(p.role || "-").slice(0, ROLE_PAD);
     const rEmoji = roleEmojiFor(game, p.role, emojiMap);
     c3.push(
-      (rEmoji ? `${rEmoji} ` : FIG.repeat(3)) +
+      (rEmoji ? `${rEmoji} ` : padSpaces(EMOJI_PREFIX_W)) +
         escMd(role) +
-        FIG.repeat(Math.max(1, ROLE_PAD - role.length)) +
+        padSpaces(Math.max(0.4, ROLE_TARGET_W - estWidth(role))) +
         ts
     );
   });
@@ -564,15 +596,17 @@ function buildTableEmbed(game, g, sorted, ctx) {
     cut = true;
   }
 
-  // Column headers are ## headings inside the field values (bigger + bold);
-  // the field names are zero-width spaces since Discord requires them non-empty.
+  // Column headers are bold field names (Discord renders headings only in
+  // descriptions, so the header row can't be made larger than this).
+  const rs = g.roleShort || "Role";
+  const roleHeader = padSpaces(EMOJI_PREFIX_W) + rs + padSpaces(Math.max(0.3, ROLE_TARGET_W - estWidth(rs))) + "Updated";
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
-      { name: "​", value: `## #${FIG}${FIG} Player\n` + c1.join("\n"), inline: true },
-      { name: "​", value: `## Current Rank · Peak\n` + c2.join("\n"), inline: true },
-      { name: "​", value: `## ${FIG.repeat(2)}${g.roleShort || "Role"}${FIG.repeat(5)}Updated\n` + c3.join("\n"), inline: true },
+      { name: `#${FIG}${FIG} Player`, value: c1.join("\n"), inline: true },
+      { name: "Current Rank · Peak", value: c2.join("\n"), inline: true },
+      { name: roleHeader, value: c3.join("\n"), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };

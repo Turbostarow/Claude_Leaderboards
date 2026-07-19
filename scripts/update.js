@@ -601,12 +601,19 @@ function buildTableEmbed(game, g, sorted, ctx) {
   // Column headers are bold field names (Discord renders headings only in
   // descriptions, so the header row can't be made larger than this).
   const rs = g.roleShort || "Role";
-  const roleHeader = padSpaces(EMOJI_PREFIX_W) + rs + padSpaces(Math.max(0.3, ROLE_TARGET_W - estWidth(rs))) + THIN + HAIR + "Updated";
+  // Header nudges come from config.headerNudge (em units, rightward only).
+  const nudge = CONFIG.headerNudge || {};
+  const roleHeader =
+    padSpaces(EMOJI_PREFIX_W + (nudge.role || 0)) +
+    rs +
+    padSpaces(Math.max(0.3, ROLE_TARGET_W - (nudge.role || 0) - estWidth(rs))) +
+    padSpaces(nudge.updated || 0) +
+    "Updated";
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
-      { name: `#${FIG}${FIG}${THIN}${HAIR} Player`, value: c1.join(ROW_SEP), inline: true },
+      { name: `#${FIG}${FIG} ` + padSpaces(nudge.player || 0) + "Player", value: c1.join(ROW_SEP), inline: true },
       { name: "Current Rank · Peak", value: c2.join(ROW_SEP), inline: true },
       { name: roleHeader, value: c3.join(ROW_SEP), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer

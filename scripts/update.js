@@ -518,6 +518,8 @@ function resolveEmojiTokens(text, emojiMap) {
 const ROLE_PAD = 12;
 const THIN = String.fromCharCode(0x2009); // thin space - non-collapsing
 const HAIR = String.fromCharCode(0x200a); // hair space - non-collapsing
+const ZWSP = String.fromCharCode(0x200b); // zero-width space (Discord accepts as non-empty)
+const ROW_SEP = "\n" + ZWSP + "\n"; // blank line between leaderboard rows
 const EMOJI_PREFIX_W = 1.9; // custom emoji + trailing space, in em
 const ROLE_TARGET_W = 5.1; // role text slot width, in em
 
@@ -589,7 +591,7 @@ function buildTableEmbed(game, g, sorted, ctx) {
   });
 
   let cut = false;
-  while ([c1, c2, c3].some((c) => c.join("\n").length > 950) && c1.length > 1) {
+  while ([c1, c2, c3].some((c) => c.join(ROW_SEP).length > 950) && c1.length > 1) {
     c1.pop();
     c2.pop();
     c3.pop();
@@ -599,14 +601,14 @@ function buildTableEmbed(game, g, sorted, ctx) {
   // Column headers are bold field names (Discord renders headings only in
   // descriptions, so the header row can't be made larger than this).
   const rs = g.roleShort || "Role";
-  const roleHeader = padSpaces(EMOJI_PREFIX_W) + rs + padSpaces(Math.max(0.3, ROLE_TARGET_W - estWidth(rs))) + "Updated";
+  const roleHeader = padSpaces(EMOJI_PREFIX_W) + rs + padSpaces(Math.max(0.3, ROLE_TARGET_W - estWidth(rs))) + THIN + HAIR + "Updated";
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
-      { name: `#${FIG}${FIG} Player`, value: c1.join("\n"), inline: true },
-      { name: "Current Rank · Peak", value: c2.join("\n"), inline: true },
-      { name: roleHeader, value: c3.join("\n"), inline: true },
+      { name: `#${FIG}${FIG}${THIN}${HAIR} Player`, value: c1.join(ROW_SEP), inline: true },
+      { name: "Current Rank · Peak", value: c2.join(ROW_SEP), inline: true },
+      { name: roleHeader, value: c3.join(ROW_SEP), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };

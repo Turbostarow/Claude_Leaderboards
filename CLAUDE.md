@@ -69,6 +69,13 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   demo/seed players — a fake id would show as @unknown-user).
 - Proportional font means figure-space padding aligns only approximately; don't promise
   pixel columns. On mobile the 3 columns stack vertically (platform behavior).
+- **Discord trims leading whitespace from field names/values** — a header built as
+  `padSpaces(...) + "Role" + ... + "Updated"` loses its leading pad, so the nudge appears
+  to move the *wrong* label (the trailing one). Fix: start the string with a U+200B
+  anchor. `estWidth` must count ZWSP as 0 or the pad math drifts by half an em.
+- `padSpaces` derives its increments from `estWidth` (never hardcode per-char widths in
+  both places): a stray edit once made `FIG` two characters, so estWidth said 0.85em
+  while padSpaces assumed 0.55em, and the error leaked into the Updated column.
 
 ## Current state & conventions
 

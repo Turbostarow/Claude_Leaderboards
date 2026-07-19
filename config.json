@@ -3,7 +3,7 @@
   "logChannelId": "1332314116051828868",
   "renderStyle": "table",
   "rowSpacing": false,
-  "headerNudge": { "player": 0.3, "role": 0.3, "updated": 0.3 },
+  "headerNudge": { "player": 0.5, "role": 0.1, "updated": 0.2 },
   "ansiColors": true,
   "games": {
     "marvel-rivals": {

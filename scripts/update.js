@@ -527,7 +527,8 @@ const ROLE_TARGET_W = 5.1; // role text slot width, in em
 function estWidth(s) {
   let w = 0;
   for (const ch of String(s)) {
-    if (ch === THIN) w += 0.2;
+    if (ch === ZWSP) w += 0; // zero-width anchor, renders as nothing
+    else if (ch === THIN) w += 0.2;
     else if (ch === HAIR) w += 0.1;
     else if (ch.charCodeAt(0) === 0x2007) w += 0.55;
     else if ("iljI.,':;|!".includes(ch)) w += 0.28;
@@ -609,7 +610,9 @@ function buildTableEmbed(game, g, sorted, ctx) {
   const nudge = CONFIG.headerNudge || {};
   // Build up to the end of "Role", then measure what was actually emitted and
   // pad to a fixed Updated target - so the role nudge never drifts Updated.
-  const rolePrefix = padSpaces(EMOJI_PREFIX_W + (nudge.role || 0)) + rs;
+  // ZWSP anchor first: Discord trims leading whitespace off field names, which
+  // would otherwise swallow the role nudge and shove "Updated" instead.
+  const rolePrefix = ZWSP + padSpaces(EMOJI_PREFIX_W + (nudge.role || 0)) + rs;
   const updatedTarget = EMOJI_PREFIX_W + ROLE_TARGET_W + (nudge.updated || 0);
   const roleHeader =
     rolePrefix + padSpaces(Math.max(0.3, updatedTarget - estWidth(rolePrefix))) + "Updated";

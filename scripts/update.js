@@ -621,7 +621,7 @@ function buildTableEmbed(game, g, sorted, ctx) {
     description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
       { name: `#${FIG}${FIG} ` + padSpaces(nudge.player || 0) + "Player", value: c1.join(ROW_SEP), inline: true },
-      { name: "Current Rank · Peak", value: c2.join(ROW_SEP), inline: true },
+      { name: "Current · Peak Rank", value: c2.join(ROW_SEP), inline: true },
       { name: roleHeader, value: c3.join(ROW_SEP), inline: true },
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],

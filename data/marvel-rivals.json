@@ -6,45 +6,5 @@
     "role": "Flex",
     "name": "ZackFair",
     "updatedAt": "2026-07-19T00:02:48.379Z"
-  },
-  {
-    "id": "demo-phoenix",
-    "name": "Phoenix",
-    "rank": "One Above All",
-    "peak": "One Above All",
-    "role": "Vanguard",
-    "updatedAt": "2026-07-14T06:09:00Z"
-  },
-  {
-    "id": "demo-turbostar",
-    "name": "Turbostar",
-    "rank": "Diamond 1",
-    "peak": "Diamond 1",
-    "role": "Strategist",
-    "updatedAt": "2026-07-19T06:06:00Z"
-  },
-  {
-    "id": "demo-tinman",
-    "name": "TinMan",
-    "rank": "Gold 2",
-    "peak": "Diamond 1",
-    "role": "Duelist",
-    "updatedAt": "2026-07-17T06:09:00Z"
-  },
-  {
-    "id": "demo-ultra",
-    "name": "Ultra",
-    "rank": "Silver 3",
-    "peak": "Grandmaster 2",
-    "role": "Flex",
-    "updatedAt": "2026-07-19T05:09:00Z"
-  },
-  {
-    "id": "demo-mega",
-    "name": "Mega",
-    "rank": "Silver 3",
-    "peak": "Grandmaster 3",
-    "role": "Flex",
-    "updatedAt": "2026-07-18T23:09:00Z"
   }
 ]

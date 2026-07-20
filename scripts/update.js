@@ -337,13 +337,37 @@ async function executeLine(line, ctx) {
   }
 
   entry.updatedAt = new Date().toISOString();
-  if (!existing) players.push(entry);
+
+  // Board cap (config.maxPlayers, 0 = unlimited): a new player must beat the
+  // current bottom to enter; whoever falls below the cap drops off the board.
+  const cap = Number(CONFIG.maxPlayers) || 0;
+  let evictedNote = "";
+  if (!existing) {
+    if (cap > 0) {
+      const candidates = [...players, entry].sort(compareEntries(game));
+      if (candidates.indexOf(entry) >= cap) {
+        throw new Error(
+          `**${escMd(entry.name)}** doesn't qualify for the ${g.label} top ${cap} - their rank is below the current #${cap}.`
+        );
+      }
+      const evicted = candidates.slice(cap);
+      ctx.data[game] = candidates.slice(0, cap);
+      if (evicted.length) {
+        evictedNote = ` · ${evicted
+          .map((e) => `**${escMd(e.name)}** dropped off the board (pushed out of the top ${cap})`)
+          .join("; ")}`;
+      }
+    } else {
+      players.push(entry);
+    }
+  }
   ctx.changed.add(game);
 
+  const pos = [...ctx.data[game]].sort(compareEntries(game)).indexOf(entry) + 1;
   const verb = cmd === "add" && !existing ? "Added" : "Updated";
   const suffix = notes.length ? ` (${notes.join("; ")})` : "";
   return {
-    reply: `${verb} **${escMd(entry.name)}** on the ${g.label} leaderboard: ${entry.rank}, peak ${entry.peak}, ${g.roleLabel.toLowerCase()}: ${escMd(entry.role)}${suffix}`,
+    reply: `${verb} **${escMd(entry.name)}** on the ${g.label} leaderboard (#${pos}): ${entry.rank}, peak ${entry.peak}, ${g.roleLabel.toLowerCase()}: ${escMd(entry.role)}${suffix}${evictedNote}`,
   };
 }
 
@@ -432,10 +456,10 @@ function compareEntries(game) {
     if (d !== 0) return d;
     const p = scoreOf(game, b.peak) - scoreOf(game, a.peak);
     if (p !== 0) return p;
-    // Tie on both ranks: whoever reached it first (older update) sits higher.
+    // Tie on both ranks: the most recent update wins (newcomers overtake).
     const ta = Date.parse(a.updatedAt) || 0;
     const tb = Date.parse(b.updatedAt) || 0;
-    if (ta !== tb) return ta - tb;
+    if (ta !== tb) return tb - ta;
     return String(a.name).localeCompare(String(b.name));
   };
 }

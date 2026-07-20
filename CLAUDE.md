@@ -80,8 +80,10 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
 ## Current state & conventions
 
 - Render style: `"table"` (default; `"rows"` and `"ansi"` still exist behind
-  `config.renderStyle`). Sorting: current rank desc → peak desc → earliest `updatedAt`
-  wins ties. Rank ladders/divisions per game in config (`divisionAscending`: OW/MR
+  `config.renderStyle`). Sorting: current rank desc → peak desc → most RECENT
+  `updatedAt` wins ties (user's choice: newcomers overtake on perfect ties).
+  `config.maxPlayers` (16) caps each board: qualifying `!add` evicts the bottom
+  player (noted in the reply/log), non-qualifying adds throw a clear rejection. Rank ladders/divisions per game in config (`divisionAscending`: OW/MR
   false = div 1 best, Deadlock true = 6 best; MR `divisionStyle` numeric by user
   choice; `divisionlessTiers` = Eternity, One Above All → short "OAA").
 - MR has server emojis for tiers (`:bronze:`…`:oneaboveall:`) and roles

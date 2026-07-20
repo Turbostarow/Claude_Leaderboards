@@ -620,7 +620,9 @@ function buildTableEmbed(game, g, sorted, ctx) {
   });
 
   let cut = false;
-  while ([c1, c2, c3].some((c) => c.join(ROW_SEP).length > 950) && c1.length > 1) {
+  // 1020 hugs Discord's 1024/field limit so a full 16-player board fits;
+  // the loop still trims gracefully if pathological content pushes past it.
+  while ([c1, c2, c3].some((c) => c.join(ROW_SEP).length > 1020) && c1.length > 1) {
     c1.pop();
     c2.pop();
     c3.pop();

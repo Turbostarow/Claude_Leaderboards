@@ -23,7 +23,7 @@
       "divisionAscending": false,
       "divisionStyle": "numeric",
       "divisionlessTiers": ["Eternity", "One Above All"],
-      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial" }
+      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial", "dia": "Diamond", "br": "Bronze", "bronz": "Bronze", "slv": "Silver", "gld": "Gold", "et": "Eternity", "etern": "Eternity" }
     },
     "overwatch": {
       "label": "Overwatch 2",
@@ -39,7 +39,7 @@
       "divisionAscending": false,
       "divisionStyle": "numeric",
       "divisionlessTiers": [],
-      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "masters": "Master", "champ": "Champion", "diamant": "Diamond" }
+      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "masters": "Master", "champ": "Champion", "diamant": "Diamond", "dia": "Diamond", "br": "Bronze", "brz": "Bronze", "slv": "Silver", "gld": "Gold", "mst": "Master", "chmp": "Champion" }
     },
     "deadlock": {
       "label": "Deadlock",
@@ -55,7 +55,7 @@
       "divisionAscending": true,
       "divisionStyle": "numeric",
       "divisionlessTiers": [],
-      "tierAliases": { "asc": "Ascendant" }
+      "tierAliases": { "asc": "Ascendant", "init": "Initiate", "seek": "Seeker", "alch": "Alchemist", "arcn": "Arcanist", "rit": "Ritualist", "emi": "Emissary", "arch": "Archon", "ora": "Oracle", "phan": "Phantom", "etern": "Eternus" }
     }
   }
 }

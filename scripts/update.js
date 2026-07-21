@@ -276,7 +276,7 @@ async function executeLine(line, ctx) {
   if (cmd === "help") return { reply: HELP_TEXT, ping: true };
   if (cmd === "refresh") {
     ctx.forceRender = true;
-    return { reply: "Re-rendering all leaderboards." };
+    return { reply: "Re-rendering all leaderboards.", isRefresh: true };
   }
 
   if (!["add", "update", "remove"].includes(cmd)) {
@@ -371,32 +371,11 @@ async function executeLine(line, ctx) {
   };
 }
 
-async function handleMessage(msg, ctx) {
-  if (msg.author?.bot) return;
-  const lines = (msg.content || "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith("!"));
-  if (lines.length === 0) return;
-
-  const errors = [];
-  const replies = [];
-  let ping = false;
-  for (const line of lines) {
-    try {
-      const r = await executeLine(line, ctx);
-      if (r.reply) replies.push(r.reply);
-      if (r.ping) ping = true;
-    } catch (e) {
-      errors.push(lines.length > 1 ? `\`${line.slice(0, 80)}\` -> ${e.message}` : e.message);
-    }
-  }
-
+/** Mirror the command outcome to the log channel, then delete the original so
+ *  the mod channel stays clean. Degrades gracefully: no log channel or missing
+ *  permissions -> falls back to the old reaction/reply behaviour. */
+async function finalizeMessage(ctx, msg, errors, replies, ping) {
   const ok = errors.length === 0;
-
-  // Mirror the command (and its outcome) to the log channel, then delete the
-  // original so the mod channel stays clean. Both steps degrade gracefully:
-  // no log channel or missing permissions -> old reaction/reply behaviour.
   const logged = await ctx.log(msg, ok, replies, errors, ping || !ok);
   const deleted = logged ? await ctx.deleteMessage(msg.id) : false;
 
@@ -409,6 +388,44 @@ async function handleMessage(msg, ctx) {
       if (parts.length) await ctx.reply(msg.id, parts.join("\n"));
     }
   }
+}
+
+async function handleMessage(msg, ctx) {
+  if (msg.author?.bot) return;
+  const rawLines = (msg.content || "").split("\n").map((l) => l.trim());
+  // Only messages that OPEN with a command are touched at all - a pinned
+  // instructions message full of example "!" lines is left completely alone
+  // as long as its first line isn't itself a command.
+  const firstNonEmpty = rawLines.find((l) => l.length > 0);
+  if (!firstNonEmpty || !firstNonEmpty.startsWith("!")) return;
+
+  const lines = rawLines.filter((l) => l.startsWith("!"));
+  if (lines.length === 0) return;
+
+  const errors = [];
+  const replies = [];
+  let ping = false;
+  let isRefresh = false;
+  for (const line of lines) {
+    try {
+      const r = await executeLine(line, ctx);
+      if (r.reply) replies.push(r.reply);
+      if (r.ping) ping = true;
+      if (r.isRefresh) isRefresh = true;
+    } catch (e) {
+      errors.push(lines.length > 1 ? `\`${line.slice(0, 80)}\` -> ${e.message}` : e.message);
+    }
+  }
+
+  if (isRefresh) {
+    // !refresh reports what actually rendered, which isn't known until after
+    // the render pass later in main() - defer this message's log+delete
+    // until that summary is available instead of finalizing immediately.
+    ctx.pendingRefresh.push({ msg, errors, replies, ping });
+    return;
+  }
+
+  await finalizeMessage(ctx, msg, errors, replies, ping);
 }
 
 /* ------------------------------------------------------------------ */
@@ -813,6 +830,8 @@ async function main() {
     systemNotes: [], // failures worth a red run
     warnings: [], // degraded-mode notices; run stays green
     notedKeys: new Set(),
+    pendingRefresh: [], // !refresh messages awaiting the render-result summary
+    renderResults: {}, // game -> { ok, error? }, filled during the render pass
 
     noteOnce(key, text) {
       if (this.notedKeys.has(key)) return;
@@ -951,9 +970,26 @@ async function main() {
     if (!needs) continue;
     try {
       await renderLeaderboard(game, ctx, state);
+      ctx.renderResults[game] = { ok: true };
     } catch (e) {
       console.error(`${game}: render failed: ${e.message}`);
       ctx.systemNotes.push(`${CONFIG.games[game].label} leaderboard update failed: ${e.message}`);
+      ctx.renderResults[game] = { ok: false, error: e.message };
+    }
+  }
+
+  // 3b. Now that render results are known, finalize any !refresh messages -
+  // their log entry gets a detailed per-game outcome instead of "used: !refresh".
+  if (ctx.pendingRefresh.length) {
+    const summaryLines = Object.keys(CONFIG.games).map((game) => {
+      const r = ctx.renderResults[game];
+      const label = CONFIG.games[game].label;
+      if (!r) return `${CHECK} ${label}: unchanged, not re-rendered`;
+      return r.ok ? `${CHECK} ${label}: rendered` : `${CROSS} ${label}: failed - ${r.error}`;
+    });
+    const summary = summaryLines.join("\n");
+    for (const p of ctx.pendingRefresh) {
+      await finalizeMessage(ctx, p.msg, p.errors, [...p.replies, summary], p.ping);
     }
   }
 

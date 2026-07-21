@@ -18,7 +18,7 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   never in any file.
 - Channels (config.json): marvel-rivals `1528158779793998006`, overwatch
   `1528158810307301446`, deadlock `1528158837218214140`, mod channel
-  `#leaderboards-manager` `1528159080605155428`, log channel `1332314116051828868`.
+  `#leaderboards-manager` `1528159080605155428`, log channel `1332314941293723732`.
 - Mods post `!add/!update/!remove/!refresh/!help` in the mod channel; each run polls new
   messages, applies them, mirrors `@mod used: <command>` + outcome to the log channel,
   deletes the command message (falls back to ✅/❌ reactions if Manage Messages or log

@@ -1,3 +1,4 @@
+# retrigger
 name: Test RivalsData Access
 
 # One-off diagnostic: can a plain server-side fetch (no browser, no cookies,

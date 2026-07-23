@@ -1,0 +1,75 @@
+name: Test RivalsData Access
+
+# One-off diagnostic: can a plain server-side fetch (no browser, no cookies,
+# GitHub Actions' IP) reach rivalsdata.com's search API and profile pages, or
+# does Cloudflare block/challenge it? Posts the verdict to the log channel.
+# Safe to delete once we have an answer.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/test-rivalsdata.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe rivalsdata.com from the Actions runner
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: |
+          node -e '
+          (async () => {
+            const lines = [];
+
+            async function probe(label, url, opts) {
+              try {
+                const res = await fetch(url, opts);
+                const text = await res.text();
+                const bodyStart = text.slice(0, 2000);
+                const looksChallenged =
+                  res.status === 403 ||
+                  (/just a moment|attention required|cf-chl|challenge-platform/i.test(bodyStart) && res.status !== 200);
+                const hasExpectedContent =
+                  label === "search-api" ? /"aid"/.test(text) : /One Above All|\d+\s*RS/.test(text);
+                lines.push(`${label}: HTTP ${res.status}, bytes=${text.length}, looksChallenged=${looksChallenged}, hasExpectedContent=${hasExpectedContent}`);
+                console.log(`--- ${label} ---`);
+                console.log("status:", res.status, "bytes:", text.length);
+                console.log(bodyStart.slice(0, 500));
+              } catch (e) {
+                lines.push(`${label}: FETCH ERROR - ${e.message}`);
+                console.log(`${label} error:`, e.message);
+              }
+            }
+
+            await probe("search-api", "https://api.rivalsdata.com/players/search", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: "stravery" }),
+            });
+            await probe("profile-html", "https://rivalsdata.com/player/1263678808");
+
+            const summary = lines.join("\n");
+            console.log("SUMMARY:\n" + summary);
+
+            if (process.env.DISCORD_TOKEN) {
+              try {
+                await fetch("https://discord.com/api/v10/channels/1332314941293723732/messages", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    content: "🧪 **RivalsData access test (din GitHub Actions):**\n```\n" + summary.slice(0, 1800) + "\n```",
+                    allowed_mentions: { parse: [] },
+                  }),
+                });
+              } catch (e) {
+                console.log("Could not post to Discord:", e.message);
+              }
+            }
+          })();
+          '

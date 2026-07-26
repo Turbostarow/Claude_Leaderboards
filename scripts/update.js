@@ -291,14 +291,23 @@ async function executeLine(line, ctx) {
   const game = resolveGame(gameToken);
   const g = CONFIG.games[game];
 
-  const mention = rest.match(/<@!?(\d+)>/);
+  // Look for the player only after the game token, so a numeric channel id
+  // used as the game can't be mistaken for the player. A bare user id is
+  // accepted alongside a real mention: copying a rendered mention out of
+  // Discord yields "@Name", which would otherwise be unusable.
+  const afterGame = rest.slice(rest.indexOf(gameToken) + gameToken.length);
+  const mention =
+    afterGame.match(/<@!?(\d+)>/) || afterGame.match(/(?:^|\s)(\d{15,20})(?=\s|$)/);
   if (!mention) {
-    throw new Error(`\`!${cmd}\` needs an @mention of the player. Try \`!help\`.`);
+    throw new Error(
+      `\`!${cmd}\` needs an @mention (or the numeric id) of the player. Try \`!help\`.`
+    );
   }
   const userId = mention[1];
 
-  const afterGame = rest.slice(rest.indexOf(gameToken) + gameToken.length);
-  const fields = parseFields(afterGame.replace(/<@!?\d+>/, " "));
+  const fields = parseFields(
+    afterGame.replace(/<@!?\d+>/, " ").replace(/(?:^|\s)\d{15,20}(?=\s|$)/, " ")
+  );
 
   const players = ctx.data[game];
   const existing = players.find((p) => p.id === userId);

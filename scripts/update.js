@@ -236,9 +236,13 @@ const HELP_TEXT = [
 
 function resolveGame(token) {
   const t = normalize(token || "");
+  // A bare channel id identifies the game too, so SCNX buttons can pass
+  // %channelID% instead of needing one custom command per game.
+  const raw = String(token || "").trim().replace(/^<#|>$/g, "");
   for (const [key, g] of Object.entries(CONFIG.games)) {
     if (normalize(key) === t) return key;
     if ((g.aliases || []).some((a) => normalize(a) === t)) return key;
+    if (g.channelId && raw === String(g.channelId)) return key;
   }
   const all = Object.entries(CONFIG.games)
     .map(([k, g]) => `${k} (${(g.aliases || []).join("/")})`)
@@ -391,7 +395,10 @@ async function finalizeMessage(ctx, msg, errors, replies, ping) {
 }
 
 async function handleMessage(msg, ctx) {
-  if (msg.author?.bot) return;
+  // Our own bot may post commands here (SCNX custom commands write !remove
+  // for self-service withdrawals); every other bot is ignored. Our own log
+  // replies never start with "!", so this can't feed back on itself.
+  if (msg.author?.bot && msg.author.id !== ctx.botId) return;
   const rawLines = (msg.content || "").split("\n").map((l) => l.trim());
   // Only messages that OPEN with a command are touched at all - a pinned
   // instructions message full of example "!" lines is left completely alone
@@ -826,6 +833,7 @@ async function main() {
     forceRender: FORCE_RENDER,
     lastId: state.modChannelLastMessageId,
     guildId: null,
+    botId: null, // filled below; lets our own bot post commands in the mod channel
     nameCache: new Map(),
     systemNotes: [], // failures worth a red run
     warnings: [], // degraded-mode notices; run stays green
@@ -925,6 +933,11 @@ async function main() {
 
   // 1. Poll the mod channel for commands.
   if (CONFIG.modChannelId) {
+    try {
+      ctx.botId = (await api("GET", "/users/@me")).id;
+    } catch (e) {
+      console.warn(`Could not resolve own bot id: ${e.message}`);
+    }
     try {
       const ch = await api("GET", `/channels/${CONFIG.modChannelId}`);
       ctx.guildId = ch.guild_id || null;

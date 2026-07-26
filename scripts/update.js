@@ -773,10 +773,51 @@ function buildEmbed(game, players, ctx) {
   };
 }
 
+/** Pull every button out of a components tree (handles Components V2 containers). */
+function collectButtons(components, out = []) {
+  for (const c of components || []) {
+    if (c.type === 2) out.push(c); // button
+    if (Array.isArray(c.components)) collectButtons(c.components, out);
+  }
+  return out;
+}
+
+/**
+ * Copy the buttons off a source message (a SCNX panel posted in some hidden
+ * channel) so they can ride along on the leaderboard embed. Same bot, so the
+ * clicks still reach SCNX and fire its custom commands. Re-read every run, so
+ * editing the panel in SCNX updates the boards automatically.
+ */
+async function loadButtonRow(ctx) {
+  const src = CONFIG.buttonSource || {};
+  if (!src.channelId || !src.messageId) return null;
+  try {
+    const msg = await api("GET", `/channels/${src.channelId}/messages/${src.messageId}`);
+    const buttons = collectButtons(msg.components).slice(0, 5);
+    if (!buttons.length) {
+      ctx.noteOnce("buttons-empty", `The button source message has no buttons on it.`);
+      return null;
+    }
+    console.log(`Copied ${buttons.length} button(s) from the source message.`);
+    return { type: 1, components: buttons };
+  } catch (e) {
+    ctx.noteOnce(
+      "buttons-load",
+      `Couldn't read the button source message (${e.message.slice(0, 100)}) - boards render without buttons.`
+    );
+    return null;
+  }
+}
+
 async function renderLeaderboard(game, ctx, state) {
   const g = CONFIG.games[game];
   const embed = buildEmbed(game, ctx.data[game], ctx);
-  const body = { content: "", embeds: [embed], allowed_mentions: { parse: [] } };
+  const body = {
+    content: "",
+    embeds: [embed],
+    components: ctx.buttonRow ? [ctx.buttonRow] : [],
+    allowed_mentions: { parse: [] },
+  };
   const existingId = state.leaderboardMessages?.[game];
 
   if (existingId) {
@@ -981,6 +1022,8 @@ async function main() {
       );
     }
   }
+
+  ctx.buttonRow = await loadButtonRow(ctx);
 
   // 2. Persist any data changes for the workflow to commit.
   for (const game of ctx.changed) saveData(game, ctx.data[game]);

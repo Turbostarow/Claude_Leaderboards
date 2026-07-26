@@ -1,7 +1,7 @@
 {
   "modChannelId": "1528159080605155428",
   "logChannelId": "1332314941293723732",
-  "buttonSource": { "channelId": "", "messageId": "" },
+  "buttonSource": { "1530782174221959341": "", "1530782276718166056": "" },
   "renderStyle": "table",
   "rowSpacing": false,
   "maxPlayers": 16,

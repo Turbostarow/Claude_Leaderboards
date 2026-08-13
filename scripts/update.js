@@ -44,22 +44,47 @@ if (!TOKEN) {
 /* Discord REST                                                        */
 /* ------------------------------------------------------------------ */
 
+// Discord's edge occasionally answers 5xx ("upstream connect error") for a few
+// seconds. Those are worth replaying; a failed render otherwise skips the run.
+const RETRY_STATUS = new Set([500, 502, 503, 504]);
+// Replaying a POST could duplicate a message when the first one silently landed,
+// so network-level failures are only retried for methods that repeat harmlessly.
+const IDEMPOTENT = new Set(["GET", "PATCH", "PUT", "DELETE"]);
+const ATTEMPTS = 5;
+
 async function api(method, route, body) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const res = await fetch(API + route, {
-      method,
-      headers: {
-        Authorization: `Bot ${TOKEN}`,
-        "Content-Type": "application/json",
-        "User-Agent": "DiscordBot (https://github.com/Turbostarow/Claude_Leaderboards, 1.0)",
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const lastTry = attempt === ATTEMPTS - 1;
+    const backoffMs = 1000 * 2 ** attempt;
+    let res;
+    try {
+      res = await fetch(API + route, {
+        method,
+        headers: {
+          Authorization: `Bot ${TOKEN}`,
+          "Content-Type": "application/json",
+          "User-Agent": "DiscordBot (https://github.com/Turbostarow/Claude_Leaderboards, 1.0)",
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (e) {
+      if (lastTry || !IDEMPOTENT.has(method)) {
+        throw new Error(`${method} ${route} -> network error: ${e.message}`);
+      }
+      console.warn(`Network error on ${method} ${route}; retrying in ${backoffMs} ms`);
+      await sleep(backoffMs);
+      continue;
+    }
     if (res.status === 429) {
       const info = await res.json().catch(() => ({}));
       const waitMs = Math.ceil(((info.retry_after ?? 1) + 0.5) * 1000);
       console.warn(`Rate limited on ${method} ${route}; waiting ${waitMs} ms`);
       await sleep(waitMs);
+      continue;
+    }
+    if (RETRY_STATUS.has(res.status) && !lastTry) {
+      console.warn(`Discord ${res.status} on ${method} ${route}; retrying in ${backoffMs} ms`);
+      await sleep(backoffMs);
       continue;
     }
     if (res.status === 204) return null;
@@ -71,7 +96,7 @@ async function api(method, route, body) {
     }
     return text ? JSON.parse(text) : null;
   }
-  throw new Error(`Gave up after repeated rate limits on ${method} ${route}`);
+  throw new Error(`Gave up after ${ATTEMPTS} attempts on ${method} ${route}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

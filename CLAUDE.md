@@ -2,6 +2,8 @@
 
 Context for working on this repo (`Turbostarow/Claude_Leaderboards`, local `G:\Claude`).
 Read alongside [README.md](README.md) (user-facing docs) — this file is the dev/agent brief.
+How to work *with the user* (language, when to ask, what needs permission) lives machine-wide
+in `~/.claude/CLAUDE.md` — keep that out of this file, which is public.
 
 ## What this is
 
@@ -105,7 +107,9 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
 
 ## Verify loop after any change
 
-1. Push (triggers a run via the push path filter; `FORCE_RENDER` is true for non-cron).
+1. **Ask the user before pushing** — a push rewrites the live embeds in his community
+   server, so it is never automatic (see `~/.claude/CLAUDE.md`). Once approved, push
+   (triggers a run via the push path filter; `FORCE_RENDER` is true for non-cron).
 2. Browser tab on example.com: fetch the raw file at the new SHA → `new Function`
    compile check → dry-run the changed renderer with real config/data + a fake emoji
    map → poll the Actions API until the run for that SHA completes green.

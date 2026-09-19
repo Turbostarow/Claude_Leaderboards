@@ -10,7 +10,7 @@
   "games": {
     "marvel-rivals": {
       "label": "Marvel Rivals",
-      "title": "Blood Rose :MR: Community Leaderboard",
+      "title": "RO <@$1314395942253756416> Community Leaderboard",
       "channelId": "1528158779793998006",
       "aliases": ["rivals", "mr", "marvelrivals", "marvel"],
       "roleLabel": "Preferred Role",
@@ -28,6 +28,7 @@
     },
     "overwatch": {
       "label": "Overwatch 2",
+      "title": "RO <@$356875221078245376> Community Leaderboard",
       "channelId": "1528158810307301446",
       "aliases": ["overwatch", "ow", "ow2", "overwatch2"],
       "roleLabel": "SoloQ Role",
@@ -44,6 +45,7 @@
     },
     "deadlock": {
       "label": "Deadlock",
+      "title": "RO <@$1276737795012165766> Community Leaderboard",
       "channelId": "1528158837218214140",
       "aliases": ["deadlock", "dl"],
       "roleLabel": "Preferred Hero",

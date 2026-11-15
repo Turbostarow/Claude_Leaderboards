@@ -661,6 +661,8 @@ const ZWSP = String.fromCharCode(0x200b); // zero-width space (Discord accepts a
 const ROW_SEP = CONFIG.rowSpacing ? "\n" + ZWSP + "\n" : "\n"; // config.rowSpacing: blank line between rows
 const EMOJI_PREFIX_W = 1.9; // custom emoji + trailing space, in em
 const ROLE_TARGET_W = 5.1; // role text slot width, in em
+const NUM_DIGIT_W = 0.62; // a bold digit in the position column, in em (measured on a live board)
+const NUM_ONE_W = 0.4; // a bold "1", which is narrower
 
 /** Rough rendered-width estimate (em) for Discord's proportional font. */
 function estWidth(s) {
@@ -723,6 +725,13 @@ function buildTableEmbed(game, g, sorted, ctx, view) {
   const c1 = [];
   const c2 = [];
   const c3 = [];
+  // Digits are proportional ("1" is narrower) and #10+ has one digit more, so
+  // without padding the names start at a different x on every row. Pad each
+  // position number to the width of the widest one. Boards of up to 9 rows are
+  // left alone: there the drift is a hair, and they stay identical to v1.0.
+  const numW = (n) => Array.from(String(n)).reduce((w, d) => w + (d === "1" ? NUM_ONE_W : NUM_DIGIT_W), 0);
+  const numTarget = String(sorted.length).length * NUM_DIGIT_W;
+  const numPad = (n) => (sorted.length < 10 ? "" : padSpaces(numTarget - numW(n)));
   sorted.forEach((p, i) => {
     const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
     // Real member ids become mention chips; demo/placeholder ids show as bold names.
@@ -739,7 +748,7 @@ function buildTableEmbed(game, g, sorted, ctx, view) {
     } else {
       who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
     }
-    c1.push(`**#${i + 1}**${FIG}${FIG} ${who}`);
+    c1.push(`**#${i + 1}**${numPad(i + 1)}${FIG}${FIG} ${who}`);
     c2.push(`${rankEmoji(game, p.rank, emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
     const role = String(p.role || "-").slice(0, ROLE_PAD);
     const rEmoji = roleEmojiFor(game, p.role, emojiMap);
@@ -797,7 +806,11 @@ function buildTableEmbed(game, g, sorted, ctx, view) {
   // invisible name (Discord rejects empty ones) - that is the seam after #16.
   const bandFields = () =>
     bands.flatMap((band, b) =>
-      band.map((col, k) => ({ name: b === 0 ? headers[k] : ZWSP, value: col.join(ROW_SEP), inline: true }))
+      band.map((col, k) => ({
+        name: b === 0 ? headers[k] : ZWSP,
+        value: col.join(ROW_SEP) + (view && b === bands.length - 1 ? "\n" + ZWSP : ""),
+        inline: true,
+      }))
     );
   // Discord caps a whole embed at 6000 characters; trim from the bottom if a
   // huge roster ever gets there.
@@ -814,7 +827,9 @@ function buildTableEmbed(game, g, sorted, ctx, view) {
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),
-    fields: [
+    // Partner boards (view) end with one blank line inside the last band; the
+    // home board keeps its full spacer field, as in v1.0.
+    fields: view ? bandFields() : [
       ...bandFields(),
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],

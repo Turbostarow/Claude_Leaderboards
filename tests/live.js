@@ -88,7 +88,7 @@ async function main() {
   const rows = (msg) => {
     const f = msg.embeds[0].fields.filter((x) => x.inline);
     let n = 0;
-    for (let i = 0; i < f.length; i += 3) n += f[i].value.split("\n").length;
+    for (let i = 0; i < f.length; i += 3) n += f[i].value.split("\n").filter((l) => /^\*\*#\d+\*\*/.test(l)).length;
     return n;
   };
   // Long names and 5-character tags on purpose: this is the layout stress case.

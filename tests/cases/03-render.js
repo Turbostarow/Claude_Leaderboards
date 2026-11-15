@@ -100,7 +100,10 @@ test("views: the global board never mentions anyone and tags every row", () => {
   const players = roster(w.config, "marvel-rivals", 8, (i) => (i % 2 ? { tag: "RMR" } : {}));
   const e = api.buildEmbed("marvel-rivals", players, ctx, GLOBAL);
   assert(!/<@!?\d+>/.test(JSON.stringify(e)), "a mention leaked into the global board");
-  const lines = inline(e)[0].value.split("\n");
+  const all = inline(e)[0].value.split("\n");
+  eq(all[all.length - 1], api.ZWSP, "the global board ends with one blank line instead of a spacer field");
+  assert(e.fields.every((f) => f.inline), "the global board has no spacer field");
+  const lines = all.slice(0, -1);
   assert(lines.every((l) => /\[(RMR|BLDRO)\] \*\*/.test(l)), lines.join(" | "));
   assert(lines.some((l) => l.includes("[RMR]")) && lines.some((l) => l.includes(`[${api.CONFIG.homeTag}]`)));
 });
@@ -142,7 +145,32 @@ test("render: markdown in a player name can't break the layout", () => {
 // ---- regression against the v1.0 renderer ----
 
 const fx = ENV.fixtures && ENV.fixtures.v10;
-test("regression: the home board is byte-identical to v1.0 for up to 16 players", () => {
+// Up to 9 players the home board is v1.0 byte for byte. From 10 on, the only
+// difference allowed is the padding after the position number (it lines the
+// names up once there are two-digit positions).
+const noNumPad = (e) => {
+  const sp = (c) => String.fromCharCode(c);
+  const pads = new RegExp(`(\\*\\*#\\d+\\*\\*)[${sp(0x2007)}${sp(0x2009)}${sp(0x200a)}]*(${sp(0x2007)}${sp(0x2007)} )`, "g");
+  return JSON.parse(JSON.stringify(e), (k, v) => (typeof v === "string" ? v.replace(pads, "$1$2") : v));
+};
+
+test("layout: from 10 players on, position numbers are padded to one width", () => {
+  const pad = (n, i) => {
+    const e = api.buildEmbed("marvel-rivals", roster(w.config, "marvel-rivals", n), ctx);
+    const line = inline(e).filter((_, k) => k % 3 === 0).flatMap((f) => f.value.split("\n"))[i - 1];
+    return api.estWidth(line.slice(`**#${i}**`.length).match(/^[^ ]*/)[0]);
+  };
+  const two = api.estWidth(api.FIG + api.FIG);
+  eq(pad(9, 1), two, "9 rows: untouched");
+  eq(pad(9, 9), two, "9 rows: untouched");
+  eq(pad(12, 12), pad(12, 10), "#10 and #12 are equally wide");
+  eq(pad(25, 22), two, "the widest number gets no extra padding");
+  assert(pad(12, 2) > pad(12, 10), "#2 gets more padding than #10");
+  assert(pad(12, 11) > pad(12, 12), "#11 (two narrow digits) gets more than #12");
+  assert(pad(12, 1) > pad(12, 2), "#1 gets more than #2");
+});
+
+test("regression: the home board is v1.0 byte for byte up to 9 players, and apart from number padding up to 16", () => {
   assert(fx && fx.cases, "fixture tests/fixtures/v1.0-boards.json is missing");
   const old = world({ configText: fx.config });
   const oldApi = old.load();
@@ -151,7 +179,8 @@ test("regression: the home board is byte-identical to v1.0 for up to 16 players"
     const [game, n] = key.split("/");
     const players = roster(old.config, game, Number(n));
     if (Number(n) >= 3) players[1] = Object.assign({}, players[1], { id: "demo-x", name: "Demo*Name_1" });
-    eq(noTimestamp(oldApi.buildEmbed(game, players, octx)), fx.cases[key], `board ${key}`);
+    const got = noTimestamp(oldApi.buildEmbed(game, players, octx));
+    eq(Number(n) >= 10 ? noNumPad(got) : got, fx.cases[key], `board ${key}`);
   }
 });
 

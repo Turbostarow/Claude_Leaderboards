@@ -96,7 +96,9 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
 - One roster per game, two views. Players carry an optional `tag` (1-5 chars A-Z0-9);
   no `tag` field = home community (`config.homeTag`, BLDRO) - existing data files were
   not migrated. Home board (bot message) = `filter(isHome)`, mentions, identical to v1.0
-  for <=16 players. Global board (mirror) = everyone, `[TAG] **Name**`, top
+  for <=9 players; from 10 rows on, every board pads the position number
+  (`NUM_DIGIT_W`/`NUM_ONE_W`, measured off a live screenshot) so names start at one x.
+  Partner boards end with a blank line in the last band instead of the spacer field. Global board (mirror) = everyone, `[TAG] **Name**`, top
   `mirror.maxPlayers`, never mentions (users outside a server render as unknown ids).
 - Renderer: `buildTableEmbed(..., view)`; rows go in bands of `BAND_SIZE` 16, each band =
   3 inline fields in the SAME embed (later bands use ZWSP field names -> one blank line

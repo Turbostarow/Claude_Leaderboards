@@ -160,7 +160,7 @@ test("mirror: the global board is capped at mirror.maxPlayers and survives a ful
   w.modSay(lines.join("\n"));
   const h = await partner(w, "p1");
   const first = h.hook.messages[0].embeds[0].fields.filter((f) => f.inline);
-  const rows = first.filter((_, i) => i % 3 === 0).reduce((n, f) => n + f.value.split("\n").length, 0);
+  const rows = first.filter((_, i) => i % 3 === 0).reduce((n, f) => n + f.value.split("\n").filter((l) => l.startsWith("**#")).length, 0);
   eq(rows, w.config.mirror.maxPlayers);
   eq(w.exitCode, 0);
 });

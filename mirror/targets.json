@@ -1,1 +1,15 @@
-{}
+{
+  "test": {
+    "url": "v1:DyaQJrRV3DCXCyjD:5Z4TDcNfhO5nmeyyhQRFHQ==:FJc3ssz0Yu3EG3FN8KleayoM4nYgFZgQvKKmC1A+CplSU2WY0qfrHWlsBWm+oJxbGvxWTYEpivs3RM2aH7VABkmjq561kEbKJA/oF/DjDULE1j+A+GutrcLtfYIbNciCylll4bRzVkEmVujjLkqHTNEFIqIa/yiw4Q==",
+    "games": [
+      "marvel-rivals"
+    ],
+    "title": null,
+    "footer": null,
+    "botname": null,
+    "avatar": null,
+    "hidden": false,
+    "addedBy": "244419214738194432",
+    "addedAt": "2026-11-15T03:14:11.790Z"
+  }
+}

@@ -67,8 +67,7 @@ test(
       }
     }
     eq(broken, [], "aliases rejected when typed alone");
-  },
-  { knownBug: 'parseRank reads a trailing "i" or "v" as a roman division, so aliases like "slv" or "emi" fail when typed with no number ("slv 2" works)' }
+  }
 );
 
 test("ranks: Marvel Rivals shorthand the mods actually type", () => {

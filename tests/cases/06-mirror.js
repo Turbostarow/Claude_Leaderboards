@@ -354,8 +354,7 @@ test(
     w.modSay(`!add rivals ${A} rank: gm 2 name: Luna`);
     await w.run();
     eq(leaks(w, [h.token]), [], "found in");
-  },
-  { knownBug: "mirror/index.js stores the raw error text in mirror/state.json (public repo); the log channel copy is redacted" }
+  }
 );
 
 test("secrets: the command message carrying the URL is deleted from the mod channel", async () => {

@@ -473,9 +473,11 @@ async function sync(env, opts) {
           if (isDeadWebhook(e)) throw e;
           // Report a persistent failure once, not on every run.
           const slot = boards[game] || (boards[game] = {});
-          if (slot.error !== e.message) {
-            slot.error = e.message;
-            env.ctx.warnings.push(`Mirror **${name}** / ${env.CONFIG.games[game].label}: ${redact(e.message)}`);
+          // state.json is committed to a public repo: store the redacted text only.
+          const text = redact(e.message);
+          if (slot.error !== text) {
+            slot.error = text;
+            env.ctx.warnings.push(`Mirror **${name}** / ${env.CONFIG.games[game].label}: ${text}`);
           }
         }
       }

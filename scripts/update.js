@@ -171,10 +171,13 @@ function parseRank(game, input) {
 
   let words = cleaned.split(" ");
   let division = null;
+  const lookup = tierLookup(game);
 
   // Peel a trailing division off the last word ("gold2", "gold ii", "gold 2").
   const last = words[words.length - 1];
-  if (/^\d+$/.test(last)) {
+  if (lookup.has(cleaned)) {
+    // The whole input is a tier or alias ("slv", "emi"): its last letter is not a division.
+  } else if (/^\d+$/.test(last)) {
     division = parseInt(last, 10);
     words = words.slice(0, -1);
   } else if (ROMAN[last] !== undefined && words.length > 1) {
@@ -188,7 +191,6 @@ function parseRank(game, input) {
     }
   }
 
-  const lookup = tierLookup(game);
   const tierIdx = lookup.get(words.join(" "));
   if (tierIdx === undefined) {
     throw new Error(

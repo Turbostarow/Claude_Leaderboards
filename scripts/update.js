@@ -797,7 +797,8 @@ function buildTableEmbed(game, g, sorted, ctx, view) {
   const roleHeader =
     rolePrefix + padSpaces(Math.max(0.3, updatedTarget - estWidth(rolePrefix))) + "Updated";
   const headers = [
-    `#${FIG}${FIG} ` + padSpaces(nudge.player || 0) + "Player",
+    // From 10 rows on the names sit further right (padded position numbers), so "Player" follows them.
+    `#${FIG}${FIG} ` + padSpaces((nudge.player || 0) + (sorted.length < 10 ? 0 : numTarget - NUM_DIGIT_W)) + "Player",
     "Current · Peak Rank",
     // The icon view has no role text to align against, so a plain label is enough.
     v.roleStyle === "icon" ? `${rs} · Updated` : roleHeader,

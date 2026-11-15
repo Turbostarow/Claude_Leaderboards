@@ -180,7 +180,18 @@ test("regression: the home board is v1.0 byte for byte up to 9 players, and apar
     const players = roster(old.config, game, Number(n));
     if (Number(n) >= 3) players[1] = Object.assign({}, players[1], { id: "demo-x", name: "Demo*Name_1" });
     const got = noTimestamp(oldApi.buildEmbed(game, players, octx));
-    eq(Number(n) >= 10 ? noNumPad(got) : got, fx.cases[key], `board ${key}`);
+    if (Number(n) < 10) {
+      eq(got, fx.cases[key], `board ${key}`);
+      continue;
+    }
+    // 10+: the "Player" header also moves right with the names; only its padding may differ.
+    const flat = noNumPad(got);
+    const want = fx.cases[key].fields[0].name;
+    const bare = (s) => s.replace(new RegExp(`[${api.FIG}${api.THIN}${api.HAIR}]`, "g"), "");
+    eq(bare(flat.fields[0].name), bare(want), `board ${key}: Player header text`);
+    assert(api.estWidth(flat.fields[0].name) > api.estWidth(want), `board ${key}: Player header moved right`);
+    flat.fields[0].name = want;
+    eq(flat, fx.cases[key], `board ${key}`);
   }
 });
 

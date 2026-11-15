@@ -1,0 +1,30 @@
+name: Live test
+
+# Started by hand only. Posts, edits, renames, hides and deletes a real board on
+# the TEST webhook (secret TEST_WEBHOOK_URL - a channel on a test server), to
+# prove Discord accepts what the mirror module sends. It uses its own temporary
+# files and key: the real partners, rosters and MIRROR_KEY are not involved.
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: "Leave the final 32-row board in the test channel to look at"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run against the test webhook
+        env:
+          TEST_WEBHOOK_URL: ${{ secrets.TEST_WEBHOOK_URL }}
+          # read-only use: the server's emoji list, so the board shows real emojis
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          KEEP: ${{ inputs.keep }}
+        run: node tests/live.js

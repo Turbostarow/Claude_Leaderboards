@@ -1238,7 +1238,17 @@ async function main() {
   if (ctx.systemNotes.length) process.exitCode = 1;
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Run only when executed directly (the workflow does `node scripts/update.js`);
+// the test suite loads this file to call the functions below instead.
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  CONFIG, HELP_TEXT, FIG, ZWSP, THIN, HAIR, BAND_SIZE,
+  api, parseRank, scoreOf, compareEntries, resolveGame, parseFields, parseTag, tagOf, isHome,
+  escMd, estWidth, padSpaces, redactWebhooks, executeLine, handleMessage, buildEmbed, main,
+};

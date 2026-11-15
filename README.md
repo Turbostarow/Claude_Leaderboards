@@ -75,6 +75,24 @@ The partner creates a webhook (*Channel Settings → Integrations → Webhooks*)
 
 Removing the `mirror/` folder turns all of this off; the home boards keep working exactly as before.
 
+## Tests
+
+The suite in [`tests/`](tests/) runs the real `scripts/update.js` and `mirror/index.js` against an in-memory **fake Discord** and in-memory files — it never touches the live server, `data/` or `mirror/`.
+
+- **On GitHub:** the *Tests* workflow runs it on every push that touches code, config or tests (`node tests/run.js`). It only reports; a red run never stops the leaderboards.
+- **On this machine (no Node needed):**
+
+  ```
+  powershell -ExecutionPolicy Bypass -File tests\run-local.ps1
+  ```
+
+  Same tests in headless Edge. Edge has no Node crypto, so encryption uses a stand-in there and the tests that check real AES run only on GitHub.
+- **Live test:** the *Live test* workflow (started by hand) posts, edits, renames, hides and deletes a real board on a test webhook. It needs the secret `TEST_WEBHOOK_URL`. With *keep* ticked it leaves a 32-row board with long names and 5-character tags to look at.
+
+What it covers: rank parsing for every tier of every game, all commands, tags and the per-community cap, Discord's embed limits over many roster sizes, the home/global views, a byte-for-byte comparison with the v1.0 board, the invisible layout characters, `config.json` sanity, full runs with Discord failing (503, 429, deleted messages, dead token, network errors), the whole partner lifecycle, and a search for leaked webhook URLs. A test marked `knownBug` documents a real defect nobody has decided to fix yet; it is listed but does not fail the suite.
+
+What no test can tell you: how a board *looks* in Discord (width, alignment) — that is what the live test's kept board is for.
+
 ## Setup checklist
 
 1. **Bot**: any Discord bot token works (this repo uses an existing bot). The bot must be in the server with, per channel:

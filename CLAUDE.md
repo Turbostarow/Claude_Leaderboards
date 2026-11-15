@@ -151,6 +151,28 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   Dev Portal reset → update SCNX dashboard + `DISCORD_TOKEN` secret; upload OW/DL
   rank emojis; possibly wipe the roster each new season (footer promises it).
 
+## Tests (`tests/`)
+
+- `tests/lib/harness.js` = runner + loader + fake Discord (enforces the real embed
+  limits, supports failure injection via `discord.fail(match, responses)`); evaluated
+  with `new Function("ENV", src)`, so the same case files run under Node
+  (`node tests/run.js`, the *Tests* workflow) and in headless Edge
+  (`powershell -ExecutionPolicy Bypass -File tests\run-local.ps1`, no Node needed).
+  `world()` gives a sandbox: `.modSay()`, `.run()` (= one workflow run), `.board()`,
+  `.logText()`, `.files`, `.discord`.
+- **Run `tests\run-local.ps1` before proposing any push.** Locally the cipher is a
+  stand-in (Edge has no Node crypto); the two real-AES tests are `nodeOnly`.
+- `update.js` exports its functions and only calls `main()` under
+  `require.main === module` - that is what lets the suite load it.
+- `tests/fixtures/v1.0-boards.json` = boards rendered by the v1.0 code with the v1.0
+  config (regenerate only by running the tagged v1.0 source through the harness).
+- `knownBug` tests document defects the user has not decided on; they don't fail the
+  suite, and the runner complains once they pass. Open ones (2026-11): bare aliases
+  ending in i/v (`slv`, `emi`) are rejected by `parseRank`; `mirror/state.json` can
+  store an unredacted error string.
+- `tests/live.js` + the *Live test* workflow hit a real test webhook
+  (`TEST_WEBHOOK_URL` secret), with their own in-memory files and throwaway key.
+
 ## Verify loop after any change
 
 1. **Ask the user before pushing** — a push rewrites the live embeds in his community

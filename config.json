@@ -24,7 +24,7 @@
       "divisionAscending": false,
       "divisionStyle": "numeric",
       "divisionlessTiers": ["Eternity", "One Above All"],
-      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial", "dia": "Diamond", "br": "Bronze", "bronz": "Bronze", "slv": "Silver", "gld": "Gold", "et": "Eternity", "etern": "Eternity" }
+      "tierAliases": { "gm": "Grandmaster", "plat": "Platinum", "oaa": "One Above All", "celest": "Celestial", "cel": "Celestial", "dia": "Diamond", "br": "Bronze", "bronz": "Bronze", "slv": "Silver", "gld": "Gold", "et": "Eternity", "etern": "Eternity" }
     },
     "overwatch": {
       "label": "Overwatch 2",

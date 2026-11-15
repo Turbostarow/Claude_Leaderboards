@@ -27,6 +27,33 @@ const DATA_DIR = path.join(ROOT, "data");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
 const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, "config.json"), "utf8"));
 
+// Optional add-on: mirrors the global boards to webhooks on other servers.
+// Everything below works unchanged when the mirror/ folder is absent.
+let mirror = null;
+try {
+  mirror = require("../mirror");
+} catch (e) {
+  if (e.code !== "MODULE_NOT_FOUND") throw e;
+}
+
+// Community tags: every player belongs to one community (max 5 chars). Players
+// without a tag belong to the home community, whose board is the bot-posted one.
+const HOME_TAG = String(CONFIG.homeTag || "").toUpperCase();
+const tagOf = (p) => String((p && p.tag) || HOME_TAG).toUpperCase();
+const isHome = (p) => tagOf(p) === HOME_TAG;
+
+function parseTag(input) {
+  const tag = String(input).trim().replace(/^\[|\]$/g, "").toUpperCase();
+  if (!/^[A-Z0-9]{1,5}$/.test(tag)) {
+    throw new Error(`Invalid tag "${input}" - use 1-5 letters or digits, e.g. \`tag: BLDRO\`.`);
+  }
+  return tag;
+}
+
+// A webhook URL is a credential: never let one reach the log channel or the run log.
+const WEBHOOK_URL_RE = /https?:\/\/(?:[\w-]+\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+/gi;
+const redactWebhooks = (s) => String(s).replace(WEBHOOK_URL_RE, "[webhook URL hidden]");
+
 const API = "https://discord.com/api/v10";
 const TOKEN = (process.env.DISCORD_TOKEN || "").trim();
 const CHECK_ONLY = process.argv.includes("--check");
@@ -242,13 +269,15 @@ function saveState(state) {
 const HELP_TEXT = [
   "**Leaderboard commands** (picked up every ~20 min, or instantly via the workflow's Run button)",
   "```",
-  "!add <game> @player rank: <rank> [peak: <rank>] [role: <text>] [name: <text>]",
-  "!update <game> @player [rank: ...] [peak: ...] [role: ...] [name: ...]",
+  "!add <game> @player rank: <rank> [peak: <rank>] [role: <text>] [name: <text>] [tag: <community>]",
+  "!update <game> @player [rank: ...] [peak: ...] [role: ...] [name: ...] [tag: ...]",
   "!remove <game> @player",
   "!refresh        force re-render of all leaderboards",
   "!help           show this message",
   "```",
   "Games: `rivals` / `ow` / `deadlock` (more aliases accepted). `hero:` works as an alias for `role:`.",
+  "`tag:` (max 5 chars) marks a player from another community; without it the player is ours." +
+    (mirror ? " Partner boards: `!mirror help`." : ""),
   "Several commands in one message (one per line) are fine.",
   "Examples:",
   "```",
@@ -277,7 +306,7 @@ function resolveGame(token) {
 
 function parseFields(text) {
   const out = {};
-  const re = /\b(rank|peak|role|hero|name)\s*:/gi;
+  const re = /\b(rank|peak|role|hero|name|tag)\s*:/gi;
   const matches = [...text.matchAll(re)];
   for (let i = 0; i < matches.length; i++) {
     const key = matches[i][1].toLowerCase();
@@ -297,7 +326,7 @@ function escMd(s) {
 /* Command execution                                                   */
 /* ------------------------------------------------------------------ */
 
-async function executeLine(line, ctx) {
+async function executeLine(line, ctx, msg) {
   const stripped = line.replace(/^!/, "").trim();
   const cmd = (stripped.split(/\s+/)[0] || "").toLowerCase();
   const rest = stripped.slice(cmd.length).trim();
@@ -305,8 +334,11 @@ async function executeLine(line, ctx) {
   if (cmd === "help") return { reply: HELP_TEXT, ping: true };
   if (cmd === "refresh") {
     ctx.forceRender = true;
+    ctx.refreshRequested = true; // also re-sends every partner board (mirror module)
     return { reply: "Re-rendering all leaderboards.", isRefresh: true };
   }
+  // Partner-board commands live in the optional mirror module.
+  if (cmd === "mirror" && mirror) return mirror.command(rest, mirrorEnv(ctx), msg);
 
   if (!["add", "update", "remove"].includes(cmd)) {
     throw new Error(`Unknown command \`!${cmd}\`. Try \`!help\`.`);
@@ -351,11 +383,18 @@ async function executeLine(line, ctx) {
     throw new Error(`\`!add\` needs at least \`rank: <rank>\`. Try \`!help\`.`);
   }
   if (cmd === "update" && Object.keys(fields).length === 0) {
-    throw new Error(`\`!update\` needs at least one field (rank/peak/role/name).`);
+    throw new Error(`\`!update\` needs at least one field (rank/peak/role/name/tag).`);
   }
+  const newTag = fields.tag !== undefined ? parseTag(fields.tag) : null;
 
   const entry = existing || { id: userId };
   const notes = [];
+
+  // Home players carry no tag field at all, so existing data files stay as they are.
+  if (newTag) {
+    if (newTag === HOME_TAG) delete entry.tag;
+    else entry.tag = newTag;
+  }
 
   if (fields.rank) entry.rank = parseRank(game, fields.rank).display;
   if (fields.peak) entry.peak = parseRank(game, fields.peak).display;
@@ -376,20 +415,25 @@ async function executeLine(line, ctx) {
 
   entry.updatedAt = new Date().toISOString();
 
-  // Board cap (config.maxPlayers, 0 = unlimited): a new player must beat the
-  // current bottom to enter; whoever falls below the cap drops off the board.
+  // Board cap (config.maxPlayers, 0 = unlimited), applied per community: a new
+  // player must beat the bottom of their own community to enter; whoever falls
+  // below the cap drops off. Other communities are never touched by it.
   const cap = Number(CONFIG.maxPlayers) || 0;
+  const community = tagOf(entry);
   let evictedNote = "";
   if (!existing) {
     if (cap > 0) {
-      const candidates = [...players, entry].sort(compareEntries(game));
+      const others = players.filter((p) => tagOf(p) !== community);
+      const candidates = [...players.filter((p) => tagOf(p) === community), entry].sort(
+        compareEntries(game)
+      );
       if (candidates.indexOf(entry) >= cap) {
         throw new Error(
           `**${escMd(entry.name)}** doesn't qualify for the ${g.label} top ${cap} - their rank is below the current #${cap}.`
         );
       }
       const evicted = candidates.slice(cap);
-      ctx.data[game] = candidates.slice(0, cap);
+      ctx.data[game] = [...others, ...candidates.slice(0, cap)].sort(compareEntries(game));
       if (evicted.length) {
         evictedNote = ` · ${evicted
           .map((e) => `**${escMd(e.name)}** dropped off the board (pushed out of the top ${cap})`)
@@ -401,12 +445,21 @@ async function executeLine(line, ctx) {
   }
   ctx.changed.add(game);
 
-  const pos = [...ctx.data[game]].sort(compareEntries(game)).indexOf(entry) + 1;
+  // Home players are ranked on our own board, everyone else on the global one.
+  const home = isHome(entry);
+  const scope = home ? ctx.data[game].filter(isHome) : ctx.data[game];
+  const pos = [...scope].sort(compareEntries(game)).indexOf(entry) + 1;
+  const where = home ? `#${pos}` : `[${community}] global #${pos}`;
   const verb = cmd === "add" && !existing ? "Added" : "Updated";
   const suffix = notes.length ? ` (${notes.join("; ")})` : "";
   return {
-    reply: `${verb} **${escMd(entry.name)}** on the ${g.label} leaderboard (#${pos}): ${entry.rank}, peak ${entry.peak}, ${g.roleLabel.toLowerCase()}: ${escMd(entry.role)}${suffix}${evictedNote}`,
+    reply: `${verb} **${escMd(entry.name)}** on the ${g.label} leaderboard (${where}): ${entry.rank}, peak ${entry.peak}, ${g.roleLabel.toLowerCase()}: ${escMd(entry.role)}${suffix}${evictedNote}`,
   };
+}
+
+/** What the optional mirror module is allowed to use from this script. */
+function mirrorEnv(ctx) {
+  return { CONFIG, ctx, buildEmbed, compareEntries, resolveGame, escMd, redactWebhooks, sleep };
 }
 
 /** Mirror the command outcome to the log channel, then delete the original so
@@ -449,12 +502,13 @@ async function handleMessage(msg, ctx) {
   let isRefresh = false;
   for (const line of lines) {
     try {
-      const r = await executeLine(line, ctx);
+      const r = await executeLine(line, ctx, msg);
       if (r.reply) replies.push(r.reply);
       if (r.ping) ping = true;
       if (r.isRefresh) isRefresh = true;
     } catch (e) {
-      errors.push(lines.length > 1 ? `\`${line.slice(0, 80)}\` -> ${e.message}` : e.message);
+      const shown = redactWebhooks(line).slice(0, 80);
+      errors.push(redactWebhooks(lines.length > 1 ? `\`${shown}\` -> ${e.message}` : e.message));
     }
   }
 
@@ -598,6 +652,7 @@ function resolveEmojiTokens(text, emojiMap) {
 }
 
 const ROLE_PAD = 12;
+const BAND_SIZE = 16; // rows per band of 3 inline fields (the Role column nears 1024 chars past this)
 const THIN = String.fromCharCode(0x2009); // thin space - non-collapsing
 const HAIR = String.fromCharCode(0x200a); // hair space - non-collapsing
 const ZWSP = String.fromCharCode(0x200b); // zero-width space (Discord accepts as non-empty)
@@ -650,11 +705,16 @@ function roleEmojiFor(game, role, emojiMap) {
 }
 
 /** Default style: a 3-column field grid - the closest Discord gets to a real table. */
-function buildTableEmbed(game, g, sorted, ctx) {
+function buildTableEmbed(game, g, sorted, ctx, view) {
+  // view (optional) tunes the board for partner servers: { names: "tagged",
+  // nameMax, roleStyle: "icon", title, footer }. Without it the output is the
+  // home board exactly as before.
+  const v = view || {};
   const emojiMap = ctx && ctx.emojiMap;
   const base = embedBase(g);
   base.title = undefined; // the big title lives in the description as a # heading instead
-  const heading = `# ${resolveEmojiTokens(g.title || `\u{1F3C6} ${g.label} — Leaderboard`, emojiMap)}`;
+  if (v.footer) base.footer = { text: String(v.footer) };
+  const heading = `# ${resolveEmojiTokens(v.title || g.title || `\u{1F3C6} ${g.label} — Leaderboard`, emojiMap)}`;
 
   if (!sorted.length) return { ...base, description: `${heading}\n*No players tracked yet.*` };
 
@@ -664,28 +724,53 @@ function buildTableEmbed(game, g, sorted, ctx) {
   sorted.forEach((p, i) => {
     const ts = p.updatedAt ? `<t:${Math.floor(Date.parse(p.updatedAt) / 1000)}:R>` : "—";
     // Real member ids become mention chips; demo/placeholder ids show as bold names.
-    const who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
+    // The "tagged" view never mentions: a user who isn't on the partner's server
+    // would render as an unknown id, so it shows "[TAG] Name" (name capped) instead.
+    let who;
+    if (v.names === "tagged") {
+      const chars = Array.from(String(p.name || p.id));
+      const max = Number(v.nameMax) || 0;
+      const shown =
+        max > 0 && chars.length > max ? chars.slice(0, Math.max(1, max - 1)).join("") + "…" : chars.join("");
+      const tag = tagOf(p);
+      who = (tag ? `[${tag}] ` : "") + `**${escMd(shown)}**`;
+    } else {
+      who = /^\d+$/.test(String(p.id)) ? `<@${p.id}>` : `**${escMd(p.name || p.id)}**`;
+    }
     c1.push(`**#${i + 1}**${FIG}${FIG} ${who}`);
     c2.push(`${rankEmoji(game, p.rank, emojiMap)} **${shortRank(game, p.rank)}** · ${shortRank(game, p.peak)}`);
     const role = String(p.role || "-").slice(0, ROLE_PAD);
     const rEmoji = roleEmojiFor(game, p.role, emojiMap);
-    c3.push(
-      (rEmoji ? `${rEmoji} ` : padSpaces(EMOJI_PREFIX_W)) +
-        escMd(role) +
-        padSpaces(Math.max(0.4, ROLE_TARGET_W - estWidth(role))) +
-        ts
-    );
+    // "icon" role style: the role emoji alone, which frees the width a tag
+    // needs. Roles without an emoji still fall back to text.
+    if (v.roleStyle === "icon" && rEmoji) {
+      c3.push(`${rEmoji} ${ts}`);
+    } else {
+      c3.push(
+        (rEmoji ? `${rEmoji} ` : padSpaces(EMOJI_PREFIX_W)) +
+          escMd(role) +
+          padSpaces(Math.max(0.4, ROLE_TARGET_W - estWidth(role))) +
+          ts
+      );
+    }
   });
 
-  let cut = false;
-  // 1020 hugs Discord's 1024/field limit so a full 16-player board fits;
-  // the loop still trims gracefully if pathological content pushes past it.
-  while ([c1, c2, c3].some((c) => c.join(ROW_SEP).length > 1020) && c1.length > 1) {
-    c1.pop();
-    c2.pop();
-    c3.pop();
-    cut = true;
+  // Rows go into bands of up to BAND_SIZE; each band is three inline fields, so
+  // a long roster stays one embed (one card, one footer). A band also closes
+  // early if the next row would push a field past Discord's 1024 characters
+  // (1020 keeps a little slack), so no row is dropped for that reason.
+  const bands = [];
+  let cur = [[], [], []];
+  const fits = (row) => cur.every((c, k) => [...c, row[k]].join(ROW_SEP).length <= 1020);
+  for (let i = 0; i < c1.length; i++) {
+    const row = [c1[i], c2[i], c3[i]];
+    if (cur[0].length >= BAND_SIZE || (cur[0].length > 0 && !fits(row))) {
+      bands.push(cur);
+      cur = [[], [], []];
+    }
+    cur.forEach((c, k) => c.push(row[k]));
   }
+  if (cur[0].length) bands.push(cur);
 
   // Column headers are bold field names (Discord renders headings only in
   // descriptions, so the header row can't be made larger than this).
@@ -700,13 +785,35 @@ function buildTableEmbed(game, g, sorted, ctx) {
   const updatedTarget = EMOJI_PREFIX_W + ROLE_TARGET_W + (nudge.updated || 0);
   const roleHeader =
     rolePrefix + padSpaces(Math.max(0.3, updatedTarget - estWidth(rolePrefix))) + "Updated";
+  const headers = [
+    `#${FIG}${FIG} ` + padSpaces(nudge.player || 0) + "Player",
+    "Current · Peak Rank",
+    // The icon view has no role text to align against, so a plain label is enough.
+    v.roleStyle === "icon" ? `${rs} · Updated` : roleHeader,
+  ];
+  // Only the first band carries the column headers; later bands get an
+  // invisible name (Discord rejects empty ones) - that is the seam after #16.
+  const bandFields = () =>
+    bands.flatMap((band, b) =>
+      band.map((col, k) => ({ name: b === 0 ? headers[k] : ZWSP, value: col.join(ROW_SEP), inline: true }))
+    );
+  // Discord caps a whole embed at 6000 characters; trim from the bottom if a
+  // huge roster ever gets there.
+  let cut = false;
+  const size = () =>
+    heading.length + 40 + String(base.footer.text).length +
+    bandFields().reduce((n, f) => n + f.name.length + f.value.length, 0);
+  while (size() > 5900 && (bands.length > 1 || bands[0][0].length > 1)) {
+    const lastBand = bands[bands.length - 1];
+    lastBand.forEach((c) => c.pop());
+    if (!lastBand[0].length) bands.pop();
+    cut = true;
+  }
   const embed = {
     ...base,
     description: heading + (cut ? "\n*…list truncated*" : ""),
     fields: [
-      { name: `#${FIG}${FIG} ` + padSpaces(nudge.player || 0) + "Player", value: c1.join(ROW_SEP), inline: true },
-      { name: "Current · Peak Rank", value: c2.join(ROW_SEP), inline: true },
-      { name: roleHeader, value: c3.join(ROW_SEP), inline: true },
+      ...bandFields(),
       { name: "​", value: "​", inline: false }, // breathing room above the footer
     ],
   };
@@ -739,11 +846,12 @@ function buildRowsEmbed(game, g, sorted, ctx) {
   return { ...embedBase(g), description };
 }
 
-function buildEmbed(game, players, ctx) {
+function buildEmbed(game, players, ctx, view) {
   const g = CONFIG.games[game];
   const sorted = [...players].sort(compareEntries(game));
   const style = CONFIG.renderStyle || "table";
-  if (style === "table") return buildTableEmbed(game, g, sorted, ctx);
+  // view options are honoured by the table style only.
+  if (style === "table") return buildTableEmbed(game, g, sorted, ctx, view);
   if (style !== "ansi") return buildRowsEmbed(game, g, sorted, ctx);
   const useAnsi = CONFIG.ansiColors !== false;
   const ESC = "\u001b";
@@ -836,7 +944,9 @@ async function loadButtonRow(ctx) {
 
 async function renderLeaderboard(game, ctx, state) {
   const g = CONFIG.games[game];
-  const embed = buildEmbed(game, ctx.data[game], ctx);
+  // Our own board shows the home community only; other communities appear on
+  // the global boards the mirror module sends out.
+  const embed = buildEmbed(game, ctx.data[game].filter(isHome), ctx);
   const body = {
     content: "",
     embeds: [embed],
@@ -935,7 +1045,7 @@ async function main() {
       if (detail) parts.push(detail);
       try {
         await api("POST", `/channels/${CONFIG.logChannelId}/messages`, {
-          content: parts.join("\n").slice(0, 1990),
+          content: redactWebhooks(parts.join("\n")).slice(0, 1990),
           // mentions render but only ping the author on errors / !help
           allowed_mentions: { parse: [], users: ping && authorId ? [authorId] : [] },
         });
@@ -969,14 +1079,24 @@ async function main() {
 
     async displayName(userId) {
       if (this.nameCache.has(userId)) return this.nameCache.get(userId);
-      let name = `User ${userId.slice(-4)}`;
+      const placeholder = `User ${userId.slice(-4)}`;
+      let name = placeholder;
       try {
         if (this.guildId) {
           const m = await api("GET", `/guilds/${this.guildId}/members/${userId}`);
           name = m.nick || m.user?.global_name || m.user?.username || name;
         }
       } catch {
-        /* fall through to placeholder; mods can set name: explicitly */
+        /* not a member of our server - try the global profile below */
+      }
+      if (name === placeholder) {
+        // Players from partner communities usually aren't members here.
+        try {
+          const u = await api("GET", `/users/${userId}`);
+          name = u.global_name || u.username || name;
+        } catch {
+          /* keep the placeholder; mods can set name: explicitly */
+        }
       }
       this.nameCache.set(userId, name);
       return name;
@@ -1055,6 +1175,7 @@ async function main() {
 
   // 3. Re-render leaderboards that need it.
   for (const game of Object.keys(CONFIG.games)) {
+    if (!CONFIG.games[game].channelId) continue; // mirror-only game: no board of our own
     const needs =
       ctx.forceRender || ctx.changed.has(game) || !state.leaderboardMessages?.[game];
     if (!needs) continue;
@@ -1065,6 +1186,18 @@ async function main() {
       console.error(`${game}: render failed: ${e.message}`);
       ctx.systemNotes.push(`${CONFIG.games[game].label} leaderboard update failed: ${e.message}`);
       ctx.renderResults[game] = { ok: false, error: e.message };
+    }
+  }
+
+  // 3a. Partner boards (optional module). The home boards above are already
+  // done, and a mirror failure is only ever a warning - never a red run.
+  if (mirror) {
+    try {
+      await mirror.sync(mirrorEnv(ctx), { force: !!ctx.refreshRequested });
+    } catch (e) {
+      const why = redactWebhooks(e && e.message ? e.message : String(e));
+      console.error(`Mirror sync failed: ${why}`);
+      ctx.warnings.push(`Mirror sync failed: ${why.slice(0, 200)}`);
     }
   }
 

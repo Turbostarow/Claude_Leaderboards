@@ -40,6 +40,15 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   commit SHA from raw.githubusercontent and compiling with `new Function(src)` in the
   browser tab (strip the `#!` shebang line first). Dry-run renderers by slicing function
   segments out of the source and evaluating them with the real config/data.
+- **Local tests without Node: headless Edge.** `msedge.exe` exists at
+  `C:\Program Files (x86)\Microsoft\Edge\Application`. Build one HTML file with
+  PowerShell that embeds the sources as JSON (`ConvertTo-Json`; get old versions
+  byte-exact with `cmd /c "git show <ref>:<path> > file"`), load `update.js` inside
+  `new Function("require","process","__dirname","console","fetch", src + ";return {...}")`
+  with stubbed `fs`/`path`/`fetch` (a never-resolving fetch parks `main()`), then run
+  `msedge --headless=new --user-data-dir=<scratch> --virtual-time-budget=15000 --dump-dom
+  file:///...` and read the result out of the dumped DOM. This runs the real renderer
+  and `executeLine` before anything is pushed - prefer it over push-then-check.
 - **PowerShell 5.1 quoting mangles embedded double quotes to native commands** — write
   multi-line commit messages to a scratchpad file and use `git commit -F <file>`.
 - The Actions bot pushes data commits (`[skip ci]`) — always `git pull --rebase` before
@@ -79,13 +88,50 @@ entirely by GitHub Actions (`.github/workflows/leaderboards.yml`): cron every 20
   both places): a stray edit once made `FIG` two characters, so estWidth said 0.85em
   while padSpaces assumed 0.55em, and the error leaked into the Updated column.
 
+## v1.2: community tags + global boards via webhook (`mirror/`)
+
+- Git: tag `v1.0` = last single-server version. v1.2 adds the optional `mirror/` module;
+  `scripts/update.js` loads it in a try/catch (`MODULE_NOT_FOUND` -> `mirror = null`) and
+  everything else must keep working with the folder deleted.
+- One roster per game, two views. Players carry an optional `tag` (1-5 chars A-Z0-9);
+  no `tag` field = home community (`config.homeTag`, BLDRO) - existing data files were
+  not migrated. Home board (bot message) = `filter(isHome)`, mentions, identical to v1.0
+  for <=16 players. Global board (mirror) = everyone, `[TAG] **Name**`, top
+  `mirror.maxPlayers`, never mentions (users outside a server render as unknown ids).
+- Renderer: `buildTableEmbed(..., view)`; rows go in bands of `BAND_SIZE` 16, each band =
+  3 inline fields in the SAME embed (later bands use ZWSP field names -> one blank line
+  after #16; that seam cannot be shrunk). `view` = `{ names: "tagged", nameMax,
+  roleStyle: "icon", title, footer }`, honoured by the table style only.
+- Discord limits (read in the official docs 2026-11): field value 1024, field name 256,
+  description 4096, 25 fields, **6000 chars total per message across all embeds**. The
+  Role column costs ~61 chars/row (custom emoji tag ~33 + role + pad + 16-char
+  timestamp), which is why a band is 16 rows; ~40 rows fit one embed in total.
+- Webhooks (docs): `POST /webhooks/{id}/{token}?wait=true` returns the message;
+  `PATCH .../messages/{id}` edits it. `username`/`avatar_url` exist ONLY on POST, so
+  changing them means delete + re-post. Non-app-owned webhooks cannot send interactive
+  components (no SCNX buttons on partner boards).
+- Webhook URLs are credentials and the repo is public: stored only as AES-256-GCM
+  blobs in `mirror/targets.json` (key = sha256 of the `MIRROR_KEY` secret, one key for
+  all partners). `redactWebhooks` in update.js and `redact` in the module keep URLs out
+  of the log channel, replies and the public Actions log - never log a URL or an
+  unredacted error. Dead webhook (404 code 10015 / 401 code 50027) -> target auto-hidden.
+- `mirror/state.json` holds message id + content hash per partner/game; a board is
+  PATCHed only when the hash changes (dispatch runs set FORCE_RENDER every 15 min, so
+  the mirror deliberately ignores it; only `!refresh` forces a resend).
+- Unverified until the first live test: custom server emojis on other servers, the
+  width of `[TAG] Name` (estimated ~12 name chars with `roleStyle: "icon"`, ~4-5 with
+  role text), and the crypto + webhook HTTP paths (not runnable locally).
+- Backburner (user's call): per-partner rosters, partner self-service intake, numeric
+  ratings (CS2 Premier), unicode emoji fallback for partner boards.
+
 ## Current state & conventions
 
 - Render style: `"table"` (default; `"rows"` and `"ansi"` still exist behind
   `config.renderStyle`). Sorting: current rank desc → peak desc → most RECENT
   `updatedAt` wins ties (user's choice: newcomers overtake on perfect ties).
-  `config.maxPlayers` (16) caps each board: qualifying `!add` evicts the bottom
-  player (noted in the reply/log), non-qualifying adds throw a clear rejection. Rank ladders/divisions per game in config (`divisionAscending`: OW/MR
+  `config.maxPlayers` (32) caps each COMMUNITY (tag): a qualifying `!add` evicts the
+  bottom player of the same community (noted in the reply/log), non-qualifying adds
+  throw a clear rejection; other communities are never touched. Rank ladders/divisions per game in config (`divisionAscending`: OW/MR
   false = div 1 best, Deadlock true = 6 best; MR `divisionStyle` numeric by user
   choice; `divisionlessTiers` = Eternity, One Above All → short "OAA").
 - MR has server emojis for tiers (`:bronze:`…`:oneaboveall:`) and roles

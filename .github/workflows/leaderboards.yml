@@ -10,6 +10,7 @@ on:
       - "data/**"
       - "config.json"
       - "scripts/**"
+      - "mirror/**"
       - ".github/workflows/leaderboards.yml"
 
 permissions:
@@ -30,6 +31,8 @@ jobs:
       - name: Poll commands and render leaderboards
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          # key for the encrypted partner webhook URLs (optional mirror/ module)
+          MIRROR_KEY: ${{ secrets.MIRROR_KEY }}
           # manual runs and hand-edits to data/config always re-render;
           # scheduled runs only touch Discord when something changed
           FORCE_RENDER: ${{ github.event_name != 'schedule' }}
@@ -45,6 +48,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data
+          # partner list + message ids of the optional mirror module
+          if [ -d mirror ]; then git add mirror; fi
           if ! git diff --cached --quiet; then
             git commit -m "chore: update leaderboard data [skip ci]"
           fi

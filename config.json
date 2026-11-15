@@ -4,7 +4,16 @@
   "buttonSource": { "channelId": "1530782174221959341", "messageId": "1530782276718166056" },
   "renderStyle": "table",
   "rowSpacing": false,
-  "maxPlayers": 16,
+  "maxPlayers": 32,
+  "homeTag": "BLDRO",
+  "mirror": {
+    "admins": [],
+    "title": "Ladder RO — {game}",
+    "footer": null,
+    "maxPlayers": 32,
+    "nameMax": 12,
+    "roleStyle": "icon"
+  },
   "headerNudge": { "player": 0.6, "role": -0.5, "updated": 0.1 },
   "ansiColors": true,
   "games": {
